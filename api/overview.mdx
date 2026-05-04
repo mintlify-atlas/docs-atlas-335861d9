@@ -1,0 +1,149 @@
+---
+title: 'Leantime JSON-RPC 2.0 API overview'
+description: 'Learn how the Leantime API works, including the endpoint, method naming convention, request and response formats, and rate limits.'
+---
+
+Leantime exposes its service layer through a JSON-RPC 2.0 API. Every public method on a domain service class that carries a `@api` annotation is callable through a single endpoint — no separate route per resource. You send a JSON object describing the method you want to call, and Leantime dispatches it to the right service class using PHP reflection.
+
+## Endpoint
+
+All requests go to a single URL:
+
+```
+POST https://your-leantime.example.com/api/jsonrpc
+```
+
+GET requests are also accepted, following the [JSON-RPC over HTTP GET convention](https://www.jsonrpc.org/historical/json-rpc-over-http.html#get) — parameters must be base64-encoded JSON passed as a `params` query string value. POST with a JSON body is the recommended approach for all clients.
+
+<Note>
+  Replace `your-leantime.example.com` with your own instance URL throughout these docs.
+</Note>
+
+## Method naming
+
+Method names follow a dot-separated convention and are **case-sensitive**:
+
+| Format | Example | When to use |
+|--------|---------|-------------|
+| `leantime.rpc.{domain}.{method}` | `leantime.rpc.tickets.getTicket` | Domain has one service class named after the domain |
+| `leantime.rpc.{domain}.{service}.{method}` | `leantime.rpc.tickets.tickets.getTicket` | You need to specify the service class explicitly |
+
+In the 4-segment form the service class name defaults to the domain name. The 5-segment form is useful when a domain exposes multiple service classes or when you want to be explicit.
+
+Methods on plugin service classes are reachable under `leantime.rpc.{pluginName}.{service}.{method}`.
+
+## Request format
+
+Every request body must be valid JSON with the following fields:
+
+<ParamField body="jsonrpc" type="string" required>
+  Must be `"2.0"`. Leantime rejects any other value.
+</ParamField>
+
+<ParamField body="method" type="string" required>
+  The dot-separated method name, e.g. `leantime.rpc.tickets.getTicket`.
+</ParamField>
+
+<ParamField body="params" type="object">
+  A JSON object whose keys match the parameter names of the target service method. Parameters with default values are optional. Unknown keys are silently ignored.
+</ParamField>
+
+<ParamField body="id" type="string | number">
+  An identifier echoed back in the response. If omitted, the request is treated as a JSON-RPC notification and no response body is returned.
+</ParamField>
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "leantime.rpc.tickets.getTicket",
+  "params": { "id": 1 },
+  "id": 1
+}
+```
+
+## Response format
+
+A successful response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": { ... },
+  "id": 1
+}
+```
+
+An error response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "error": {
+    "code": -32601,
+    "message": "Method not found",
+    "data": "Service doesn't exist: Foobar"
+  },
+  "id": 1
+}
+```
+
+## Quick example
+
+```bash
+curl -X POST https://your-leantime.example.com/api/jsonrpc \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: lt_username_yourapikey" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "leantime.rpc.tickets.getTicket",
+    "params": { "id": 1 },
+    "id": 1
+  }'
+```
+
+## Batch requests
+
+You can send multiple calls in one HTTP request by wrapping them in a JSON array. Each element is an independent request object, and the response is an array in the same order.
+
+```json
+[
+  { "jsonrpc": "2.0", "method": "leantime.rpc.tickets.getTicket", "params": { "id": 1 }, "id": 1 },
+  { "jsonrpc": "2.0", "method": "leantime.rpc.projects.getProject", "params": { "id": 5 }, "id": 2 }
+]
+```
+
+## Rate limits
+
+Leantime applies rate limits per IP address at the middleware layer. Default limits (configurable via `LEAN_RATELIMIT_*` environment variables):
+
+| Request type | Default limit |
+|--------------|--------------|
+| API requests | 10 per minute |
+| General requests | 10 000 per minute |
+| Login attempts | 20 per minute |
+
+Requests that exceed a limit receive an HTTP `429` response.
+
+## Available methods
+
+Any public method on a domain service class annotated with `@api` is accessible through the API. The annotation is documentation only — it is not enforced at runtime. To discover available methods, browse the service classes under `app/Domain/*/Services/` in the Leantime source code.
+
+Key domains with `@api` methods include:
+
+- **Tickets** — tasks, milestones, subtasks, status labels
+- **Projects** — projects, progress, user assignments
+- **Users** — user profiles, editing, listing
+- **Timesheets** — time logging, punch in/out
+
+## Deprecated REST controllers
+
+The `app/Domain/Api/Controllers/` directory contains legacy REST-style controllers (`Tickets.php`, `Projects.php`, etc.) that predate the JSON-RPC API. These are deprecated and should not be used for new integrations. Use the JSON-RPC endpoint for all API work.
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key" href="/api/authentication">
+    Learn how to authenticate API requests with API keys or Bearer tokens.
+  </Card>
+  <Card title="Usage and examples" icon="code" href="/api/usage">
+    See real request and response examples for tickets, projects, and more.
+  </Card>
+</CardGroup>

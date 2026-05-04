@@ -1,0 +1,111 @@
+{
+  "projectType": "saas",
+  "projectName": "Leantime",
+  "projectDescription": "Leantime is an open-source, goals-focused project management system built for non-project managers, with accessibility features for ADHD, dyslexia, and autism.",
+  "theme": "almond",
+  "primaryColor": "#048ca4",
+  "lightColor": "#488fb4",
+  "darkColor": "#eff7f8",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "getting-started/quickstart",
+              "getting-started/system-requirements"
+            ]
+          },
+          {
+            "group": "Installation",
+            "pages": [
+              "installation/docker",
+              "installation/manual",
+              "installation/configuration",
+              "installation/updating",
+              "installation/common-issues"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "features/task-management",
+              "features/project-planning",
+              "features/goals-and-strategy",
+              "features/timesheets",
+              "features/knowledge-management"
+            ]
+          },
+          {
+            "group": "Administration",
+            "pages": [
+              "administration/user-management",
+              "administration/authentication",
+              "administration/plugins",
+              "administration/cli-reference"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Developer",
+        "groups": [
+          {
+            "group": "API",
+            "pages": [
+              "api/overview",
+              "api/authentication",
+              "api/usage"
+            ]
+          },
+          {
+            "group": "Plugin Development",
+            "pages": [
+              "development/plugin-development",
+              "development/events-and-filters",
+              "development/architecture"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Kanban boards, Gantt charts, table, list, and calendar task views",
+    "Goal and metrics tracking with strategy canvases",
+    "Sprint and milestone management",
+    "Time tracking and timesheets",
+    "Wikis, idea boards, and retrospectives",
+    "JSON-RPC 2.0 API for programmatic access",
+    "Plugin system for extensibility",
+    "LDAP, OIDC, and social authentication support",
+    "Docker-based deployment with Helm chart support",
+    "Multi-language support (20+ languages)",
+    "Two-factor authentication",
+    "S3 and local file storage",
+    "Neurodiversity-friendly design (ADHD, dyslexia, autism)"
+  ],
+  "publicApiSurface": [
+    "POST /api/jsonrpc — leantime.rpc.{domain}.{method}",
+    "leantime.rpc.tickets.getTicket",
+    "leantime.rpc.tickets.createTicket",
+    "leantime.rpc.tickets.updateTicket",
+    "leantime.rpc.tickets.deleteTicket",
+    "leantime.rpc.projects.getProject",
+    "leantime.rpc.projects.createProject",
+    "leantime.rpc.projects.updateProject",
+    "leantime.rpc.users.getUser",
+    "leantime.rpc.users.createUser",
+    "leantime.rpc.timesheets.getTimesheets",
+    "php bin/leantime system:update",
+    "php bin/leantime plugin:enable [pluginname]",
+    "php bin/leantime plugin:disable [pluginname]",
+    "php bin/leantime plugin:install [pluginname]",
+    "php bin/leantime plugin:list",
+    "php bin/leantime user:add",
+    "php bin/leantime setting:save [key] [value]"
+  ]
+}

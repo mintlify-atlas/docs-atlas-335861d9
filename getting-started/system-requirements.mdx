@@ -1,0 +1,109 @@
+---
+title: "Leantime server and PHP requirements"
+description: "Everything your server needs before installing Leantime: PHP version, required extensions, supported databases, web servers, and optional Redis or S3 storage."
+---
+
+Before installing Leantime, confirm your server meets the requirements below. Missing a required PHP extension is the most common cause of installation failures, so work through the extension list carefully. If you're using Docker, the official image already satisfies every requirement — skip to the [quickstart](/getting-started/quickstart).
+
+## Runtime requirements
+
+| Component | Minimum version | Notes |
+|-----------|----------------|-------|
+| PHP | 8.2 | Tested with PHP 8.2 and later |
+| MySQL | 8.0 | |
+| MariaDB | 10.6 | Alternative to MySQL |
+| Apache | Any modern version | Recommended web server |
+| Nginx | Any modern version | Recommended web server |
+| IIS | Any modern version | Requires additional PATCH method configuration |
+
+<Note>
+  IIS requires an extra step to allow the HTTP PATCH method. In **Handler Mappings**, open the PHP handler, click **Request Restrictions → Verbs**, and add `PATCH` to the allowed verbs list. See the [manual installation guide](/installation/manual) for the full walkthrough.
+</Note>
+
+## Required PHP extensions
+
+Leantime requires all of the following extensions. Most are bundled with PHP by default, but shared hosting environments sometimes disable a few.
+
+| Extension | Package name | Purpose |
+|-----------|-------------|---------|
+| BC Math | `bcmath` | Arbitrary-precision arithmetic |
+| Ctype | `ctype` | Character type checking |
+| cURL | `curl` | HTTP requests to external services |
+| DOM | `dom` | XML/HTML document parsing |
+| Exif | `exif` | Image metadata handling |
+| Fileinfo | `fileinfo` | MIME type detection for uploads |
+| Filter | `filter` | Input sanitisation and validation |
+| GD | `gd` | Image processing (thumbnails, avatars) |
+| Hash | `hash` | Cryptographic hashing |
+| LDAP | `ldap` | LDAP/Active Directory authentication |
+| Multibyte String | `mbstring` | Multi-byte character encoding |
+| MySQL | `mysqli` | MySQL database driver |
+| OPcache | `opcache` | PHP bytecode caching for performance |
+| OpenSSL | `openssl` | Encryption and HTTPS support |
+| PCNTL | `pcntl` | Process control for background jobs |
+| PCRE | `pcre` | Regular expression support |
+| PDO | `pdo` | Database abstraction layer |
+| Phar | `phar` | Phar archive support for marketplace plugins |
+| Session | `session` | PHP session management |
+| Tokenizer | `tokenizer` | PHP tokenisation |
+| Zip | `zip` | Archive handling for file uploads and plugins |
+| SimpleXML | `simplexml` | XML parsing |
+
+To check which extensions are active on your server, run:
+
+```bash
+php -m
+```
+
+Or create a temporary file at your web root:
+
+```php
+<?php phpinfo();
+```
+
+<Warning>
+  Remove the `phpinfo()` file from your web root immediately after checking. It exposes sensitive server configuration details.
+</Warning>
+
+## Optional components
+
+These are not required for a basic installation but unlock additional functionality.
+
+### Redis
+
+Redis can be used for session storage and application caching, which improves performance under load and enables shared sessions across multiple app instances.
+
+Configure it in `config/.env`:
+
+```bash
+LEAN_USE_REDIS=true
+LEAN_REDIS_HOST=your-redis-host
+LEAN_REDIS_PORT=6379
+LEAN_REDIS_PASSWORD=your-redis-password
+```
+
+### S3-compatible object storage
+
+By default Leantime stores uploaded files on the local filesystem. You can switch to any S3-compatible provider (AWS S3, DigitalOcean Spaces, MinIO, etc.) for scalable or multi-instance deployments.
+
+Configure it in `config/.env`:
+
+```bash
+LEAN_USE_S3=true
+LEAN_S3_KEY=your-access-key
+LEAN_S3_SECRET=your-secret-key
+LEAN_S3_BUCKET=your-bucket-name
+LEAN_S3_REGION=us-east-1
+LEAN_S3_END_POINT=https://sfo2.digitaloceanspaces.com   # omit for AWS S3
+LEAN_S3_USE_PATH_STYLE_ENDPOINT=false
+```
+
+## Using Docker
+
+The official `leantime/leantime` Docker image satisfies all PHP and extension requirements automatically. You only need to provide a compatible MySQL or MariaDB database and the required environment variables.
+
+<Tip>
+  If you want to verify requirements before pulling the Docker image, you can inspect the image's base PHP configuration with `docker run --rm leantime/leantime:latest php -m`.
+</Tip>
+
+Ready to install? Follow the [quickstart guide](/getting-started/quickstart) for step-by-step instructions for both Docker and manual setups.

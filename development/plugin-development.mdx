@@ -1,0 +1,250 @@
+---
+title: 'Build a plugin for Leantime'
+description: 'Create a Leantime plugin: directory layout, composer.json with type leantime-plugin, the Registration API for assets and menus, and lifecycle hooks.'
+---
+
+Plugins extend Leantime without touching core code. Each plugin is a self-contained PHP package that lives in `app/Plugins/` and mirrors the same domain structure used by Leantime's 56 built-in domains — Controllers, Services, Repositories, Templates, and so on. Leantime's Composer installer places any package of `"type": "leantime-plugin"` directly into that folder.
+
+## Plugin types
+
+Leantime supports three plugin types that differ in how and when they load.
+
+| Type | How it loads | Can be disabled via UI |
+|---|---|---|
+| **System** | Listed in `LEAN_PLUGINS` env variable; loads at boot before middleware | No |
+| **Custom** | Folder placed in `app/Plugins/`; discovered and managed through the admin UI | Yes |
+| **Marketplace** | Downloaded from marketplace.leantime.io as a phar archive; requires a license key | Yes |
+
+<Note>
+  During development, use a **custom** plugin. Drop your folder into `app/Plugins/`, then enable it through **Administration → Plugins** or with `php bin/leantime plugin:enable YourPlugin`.
+</Note>
+
+## Directory structure
+
+A plugin mirrors the layout of a core domain. Only `composer.json` and `register.php` are mandatory; add other directories as your plugin needs them.
+
+```text
+app/Plugins/MyPlugin/
+├── composer.json         # required — identifies the plugin
+├── register.php          # required — registers listeners, assets, and menu items
+├── Controllers/          # HTTP controllers (standard or HTMX)
+├── Hxcontrollers/        # HTMX partial controllers
+├── Services/             # business logic (also the JSON-RPC API surface)
+├── Repositories/         # data access
+├── Models/               # data structures
+├── Templates/            # Blade (.blade.php) or legacy (.tpl.php) templates
+├── Js/                   # plugin JavaScript
+├── Language/             # INI translation files (e.g. en-US.ini)
+└── dist/                 # compiled assets output by npx mix
+```
+
+## composer.json
+
+Every plugin needs a `composer.json`. The `"type"` field must be `"leantime-plugin"` — this is what Leantime's installer uses to place the package in `app/Plugins/{name}/`.
+
+```json
+{
+    "name": "yourvendor/my-plugin",
+    "description": "A short description of what the plugin does.",
+    "type": "leantime-plugin",
+    "version": "1.0.0",
+    "homepage": "https://example.com",
+    "authors": [
+        {
+            "name": "Your Name",
+            "email": "you@example.com"
+        }
+    ],
+    "require": {
+        "php": "^8.2"
+    }
+}
+```
+
+<Warning>
+  The `"type": "leantime-plugin"` field is not optional. Without it, Composer will not place the package in `app/Plugins/` and Leantime will not discover it.
+</Warning>
+
+## register.php
+
+`register.php` is the entry point for your plugin. Leantime executes this file when the plugin loads — for user plugins this happens inside the `LoadPlugins` middleware, after the session has started and authentication has run.
+
+Use `register.php` to:
+
+- Register event and filter listeners via `EventDispatcher`
+- Enqueue CSS and JavaScript files
+- Add menu items to the sidebar
+- Register custom middleware
+- Load translation files
+
+The `Registration` service (`Leantime\Domain\Plugins\Services\Registration`) provides a fluent API for all of these tasks.
+
+```php
+<?php
+
+use Leantime\Core\Events\EventDispatcher;
+use Leantime\Domain\Plugins\Services\Registration;
+
+// Instantiate the Registration helper with your plugin's folder name
+$registration = new Registration('MyPlugin');
+
+// Register a custom middleware class into the plugin pipeline
+$registration->registerMiddleware([\Leantime\Plugins\MyPlugin\Middleware\MyMiddleware::class]);
+
+// Load translation files (discovered automatically from Language/ if omitted)
+$registration->registerLanguageFiles(['en-US', 'de-DE']);
+
+// Add a menu item to the project sidebar
+$registration->addMenuItem(
+    item: [
+        'title'   => 'myplugin.menu.title',   // language key
+        'tooltip' => 'myplugin.menu.tooltip',
+        'href'    => '/myplugin/show',
+        'icon'    => 'fa fa-puzzle-piece',
+    ],
+    section: 'project',
+    location: ['main', 'myplugin-item']
+);
+
+// Enqueue compiled CSS (path relative to dist/ manifest)
+$registration->addCss(['app.css']);
+
+// Enqueue JS in the <head> (before page content)
+$registration->addHeaderJs(['vendor.js']);
+
+// Enqueue JS before </body>
+$registration->addFooterJs(['app.js']);
+
+// You can also register listeners directly
+EventDispatcher::addEventListener(
+    'leantime.domain.auth.*.userSignUpSuccess',
+    function ($params) {
+        // Runs after every successful sign-up
+    }
+);
+```
+
+See [Events and filters](/development/events-and-filters) for the full listener API.
+
+## Plugin service class
+
+Leantime looks for a service class at `Plugins\{PluginName}\Services\{PluginName}` to call lifecycle hooks. Create this class to run code during install, uninstall, enable, and disable operations.
+
+```php
+<?php
+
+namespace Leantime\Plugins\MyPlugin\Services;
+
+use Leantime\Core\Events\DispatchesEvents;
+
+class MyPlugin
+{
+    use DispatchesEvents;
+
+    /**
+     * Called once when the plugin is first installed.
+     * Use this to create database tables or seed initial data.
+     */
+    public function install(): void
+    {
+        // e.g. run a migration
+    }
+
+    /**
+     * Called when the plugin is removed.
+     * Clean up any tables or data your plugin created.
+     */
+    public function uninstall(): void
+    {
+        // e.g. drop custom tables
+    }
+
+    /**
+     * Called each time the plugin is enabled.
+     */
+    public function enable(): void
+    {
+        // optional
+    }
+
+    /**
+     * Called each time the plugin is disabled.
+     */
+    public function disable(): void
+    {
+        // optional
+    }
+}
+```
+
+## Plugin lifecycle
+
+The full lifecycle in order is:
+
+<Steps>
+  <Step title="Discovery">
+    Leantime scans `app/Plugins/` for folders that contain a valid `composer.json`. New folders appear in **Administration → Plugins** under "Available plugins". Trigger this manually with:
+
+    ```bash
+    php bin/leantime plugin:list
+    ```
+  </Step>
+  <Step title="Install">
+    Installing a plugin reads `composer.json`, calls `install()` on the service class, and records the plugin in the database. Via CLI:
+
+    ```bash
+    php bin/leantime plugin:enable MyPlugin
+    ```
+  </Step>
+  <Step title="Enable">
+    Enabling the plugin sets it active in the database and calls `enable()`. After the next request the plugin's `register.php` will run on every page load.
+  </Step>
+  <Step title="Disable">
+    Disabling calls `disable()` and marks the plugin inactive. Its `register.php` no longer loads. Data in the database is preserved.
+  </Step>
+  <Step title="Remove">
+    Removing calls `uninstall()` and deletes the database record. The folder in `app/Plugins/` is **not** deleted automatically.
+  </Step>
+</Steps>
+
+## Loading order
+
+Understanding when your plugin's code runs matters for hooking into the right events.
+
+- **System plugins** — declared in `LEAN_PLUGINS` — are loaded at boot during `discoverListeners()`, before any middleware runs. Their `register.php` files execute early in the stack.
+- **User plugins** — enabled via the UI or CLI — load inside the `LoadPlugins` middleware, which runs fifth in the middleware stack (after session initialisation and installation/update checks).
+
+Plugin `routes.php` files (if present) are loaded by `RouteLoader` alongside domain routes.
+
+## Development workflow
+
+<Steps>
+  <Step title="Create the plugin folder">
+    ```bash
+    mkdir -p app/Plugins/MyPlugin
+    ```
+  </Step>
+  <Step title="Add composer.json and register.php">
+    Copy the examples above and adjust names to match your plugin.
+  </Step>
+  <Step title="Enable the plugin">
+    ```bash
+    php bin/leantime plugin:enable MyPlugin
+    ```
+
+    Or go to **Administration → Plugins** and click **Enable**.
+  </Step>
+  <Step title="Build assets (if needed)">
+    Run Laravel Mix from inside your plugin folder if you have JS or CSS to compile:
+
+    ```bash
+    npx mix
+    ```
+
+    Output lands in `app/Plugins/MyPlugin/dist/`.
+  </Step>
+</Steps>
+
+<Tip>
+  Add `LEAN_PLUGINS=MyPlugin` to your `config/.env` during development to load your plugin as a system plugin. This means your `register.php` runs before all middleware — useful for testing early boot hooks.
+</Tip>

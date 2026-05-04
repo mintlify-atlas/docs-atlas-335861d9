@@ -1,0 +1,351 @@
+---
+title: 'Events and filters in Leantime plugins'
+description: 'Use the Leantime event system to react to app actions and modify data with filters — covering listener registration, wildcard patterns, and Blade directives.'
+---
+
+Leantime's event system lets plugins hook into the application without modifying core code. It extends Laravel's `Dispatcher` interface with two parallel mechanisms inspired by the WordPress hook model: **events** for fire-and-forget notifications, and **filters** for transforming data as it passes through a pipeline.
+
+## Events vs filters
+
+<Tabs>
+  <Tab title="Events">
+    An event fires and forgets. Listeners can run side-effects (send a notification, write a log, trigger a background job), but they cannot change the value that triggered the event.
+
+    **Dispatching from a service:**
+
+    ```php
+    use Leantime\Core\Events\DispatchesEvents;
+
+    class Tickets
+    {
+        use DispatchesEvents;
+
+        public function createTicket(array $values): int|false
+        {
+            $id = $this->ticketRepository->addTicket($values);
+
+            if ($id) {
+                self::dispatch_event('ticket_created', ['id' => $id, 'values' => $values]);
+            }
+
+            return $id;
+        }
+    }
+    ```
+
+    **Listening:**
+
+    ```php
+    EventDispatcher::add_event_listener(
+        'leantime.domain.tickets.services.tickets.createTicket.ticket_created',
+        function ($params) {
+            // $params contains ['id' => ..., 'values' => ...]
+            // do something with the new ticket
+        }
+    );
+    ```
+  </Tab>
+  <Tab title="Filters">
+    A filter passes a value through a chain of listeners, each of which can modify it and must return the (possibly changed) value. The final return value is what the caller receives.
+
+    **Dispatching from a service:**
+
+    ```php
+    $installedPlugins = self::dispatch_filter(
+        'beforeReturnAllPlugins',
+        $installedPlugins,
+        ['enabledOnly' => $enabledOnly]
+    );
+
+    return $installedPlugins;
+    ```
+
+    **Listening:**
+
+    ```php
+    EventDispatcher::add_filter_listener(
+        'leantime.domain.plugins.services.plugins.getAllPlugins.beforeReturnAllPlugins',
+        function ($plugins, $params) {
+            // $plugins is the current value; $params contains extra context
+            // add, remove, or modify entries, then return the value
+            unset($plugins['unwanted-plugin']);
+            return $plugins;
+        }
+    );
+    ```
+
+    <Warning>
+      Filter listeners **must** return the payload. If your listener returns `null` or nothing, the value is replaced with `null` for all subsequent listeners in the chain.
+    </Warning>
+  </Tab>
+</Tabs>
+
+## Event name convention
+
+Event names are generated automatically from the fully-qualified class name of the dispatching class, the method name, and the hook name passed to `dispatch_event()` or `dispatch_filter()`. The namespace segments are lowercased and joined with dots.
+
+```text
+leantime . {namespace segments} . {method} . {hook_name}
+```
+
+For example, a call to `self::dispatch_event('ticket_updated', ...)` inside `Leantime\Domain\Tickets\Services\Tickets::updateTicket()` produces:
+
+```text
+leantime.domain.tickets.services.tickets.updateTicket.ticket_updated
+```
+
+<Note>
+  If a class moves to a different namespace, all its event names change. This is the main reason Leantime is migrating toward class-based events. For now, all production hooks use string names.
+</Note>
+
+## Registering listeners
+
+Register listeners in your plugin's `register.php`. The three available methods cover different use cases.
+
+### Class-based listener
+
+Point to a class that implements a `handle()` method. The class is resolved through Laravel's service container, so constructor DI works as normal.
+
+```php
+use Leantime\Core\Events\EventDispatcher;
+
+EventDispatcher::add_event_listener(
+    'leantime.domain.projects.services.projects.notifyProjectUsers.notifyProjectUsers',
+    \Leantime\Plugins\MyPlugin\Listeners\NotifyProjectUsers::class
+);
+```
+
+```php
+<?php
+
+namespace Leantime\Plugins\MyPlugin\Listeners;
+
+class NotifyProjectUsers
+{
+    public function handle(array $params): void
+    {
+        // $params contains the payload dispatched by the event
+    }
+}
+```
+
+### Closure listener
+
+Inline closures are convenient for short listeners. Use `addEventListener` (camelCase alias) or `add_event_listener`.
+
+```php
+EventDispatcher::addEventListener(
+    'leantime.domain.auth.*.userSignUpSuccess',
+    function ($params) {
+        $helperService = app()->make(\Leantime\Domain\Help\Services\Helper::class);
+        $helperService->createDefaultProject(
+            session('userdata.id'),
+            session('userdata.role')
+        );
+    }
+);
+```
+
+### Filter listener with priority
+
+The third argument to `add_filter_listener()` is a priority integer. Lower numbers execute first. The default is `10` when omitted.
+
+```php
+EventDispatcher::add_filter_listener(
+    'leantime.domain.menu.repositories.menu.getMenuStructure.menuStructures.project',
+    function ($menu) {
+        $menu['my-plugin-item'] = [
+            'type'    => 'item',
+            'title'   => '<span class="fa fa-puzzle-piece"></span> My Plugin',
+            'tooltip' => 'Open My Plugin',
+            'href'    => '/myplugin/show',
+            'module'  => 'MyPlugin',
+        ];
+
+        return $menu;
+    },
+    50  // runs before default priority of 10... wait, lower = earlier
+);
+```
+
+<Note>
+  Priority `1` runs before priority `50`. Use a low number to run your listener early in the chain, a high number to run it last. Most core hooks use the default of `10`.
+</Note>
+
+## Pattern matching in event names
+
+When registering listeners you can use patterns instead of exact names. This lets a single listener cover multiple related events.
+
+| Wildcard | Matches |
+|---|---|
+| `*` | Any single segment (replaces one dot-delimited part) |
+| `?` | Any single character |
+| `{RGX:pattern:RGX}` | Inline PHP regex on the full event name |
+
+**Example — listen to all auth events:**
+
+```php
+EventDispatcher::add_event_listener(
+    'leantime.domain.auth.*.*',
+    function ($params) {
+        // fires for any event dispatched from the Auth domain
+    }
+);
+```
+
+**Example — regex pattern:**
+
+```php
+EventDispatcher::add_event_listener(
+    '{RGX:leantime\.domain\.(tickets|projects)\..*:RGX}',
+    function ($params) {
+        // fires for any event in the Tickets or Projects domains
+    }
+);
+```
+
+## Blade directives
+
+Templates can dispatch events and filters without importing PHP classes.
+
+```blade
+{{-- Fire an event from a template --}}
+@dispatchEvent('my_plugin_section')
+
+{{-- Apply a filter to a value in a template --}}
+@php
+    $content = 'default content';
+@endphp
+@dispatchFilter('my_plugin_content', $content)
+```
+
+The directives use the same `EventDispatcher` under the hood. The event name passed here is the full hook name you register listeners against.
+
+## Common hook points for plugins
+
+These are frequently used hooks that plugin developers target.
+
+<AccordionGroup>
+  <Accordion title="Add a menu item to the project sidebar">
+    ```php
+    // Via the Registration helper (recommended)
+    $registration->addMenuItem(
+        item: [
+            'title'   => 'myplugin.menu.title',
+            'tooltip' => 'myplugin.menu.tooltip',
+            'href'    => '/myplugin/show',
+            'icon'    => 'fa fa-puzzle-piece',
+        ],
+        section: 'project',
+        location: ['main', 'myplugin']
+    );
+
+    // Directly via filter (equivalent to what Registration does internally)
+    EventDispatcher::add_filter_listener(
+        'leantime.domain.menu.repositories.menu.getMenuStructure.menuStructures.project',
+        function ($menu) {
+            $menu['myplugin'] = [/* ... */];
+            return $menu;
+        },
+        50
+    );
+    ```
+  </Accordion>
+
+  <Accordion title="Inject content into page headers and footers">
+    ```php
+    // Inject a <script> or <link> tag after the page's link tags
+    EventDispatcher::add_event_listener(
+        'leantime.*.afterLinkTags',
+        function () {
+            echo '<link rel="stylesheet" href="/app/Plugins/MyPlugin/dist/app.css" />';
+        }
+    );
+
+    // Inject content just before </body>
+    EventDispatcher::add_event_listener(
+        'leantime.*.beforeBodyClose',
+        function () {
+            echo '<script src="/app/Plugins/MyPlugin/dist/app.js"></script>';
+        }
+    );
+    ```
+
+    <Tip>
+      Use `$registration->addCss()` and `$registration->addFooterJs()` instead of raw event listeners. The `Registration` helper handles the asset manifest lookup automatically.
+    </Tip>
+  </Accordion>
+
+  <Accordion title="Run code after a user signs up">
+    ```php
+    EventDispatcher::addEventListener(
+        'leantime.domain.auth.*.userSignUpSuccess',
+        function ($params) {
+            $userId   = session('userdata.id');
+            $userRole = session('userdata.role');
+            // set up data for the new user
+        }
+    );
+    ```
+  </Accordion>
+
+  <Accordion title="Modify the plugin list before it is returned">
+    ```php
+    EventDispatcher::add_filter_listener(
+        'leantime.domain.plugins.services.plugins.getAllPlugins.beforeReturnAllPlugins',
+        function ($plugins, $params) {
+            // $params['enabledOnly'] tells you which mode was requested
+            return $plugins;
+        }
+    );
+    ```
+  </Accordion>
+
+  <Accordion title="Modify the security headers">
+    The `InitialHeaders` middleware dispatches a filter that lets plugins extend the Content Security Policy:
+
+    ```php
+    EventDispatcher::add_filter_listener(
+        'leantime.core.middleware.initialheaders.handle.cspHeader',
+        function ($cspHeader) {
+            // append a source to the script-src directive, for example
+            return $cspHeader . " https://cdn.example.com";
+        }
+    );
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## The DispatchesEvents trait
+
+Any class that needs to dispatch events or filters should use the `DispatchesEvents` trait. It provides the static `dispatch_event()` and `dispatch_filter()` helpers and automatically derives the event name from the calling class's namespace and method.
+
+```php
+<?php
+
+namespace Leantime\Plugins\MyPlugin\Services;
+
+use Leantime\Core\Events\DispatchesEvents;
+
+class MyPlugin
+{
+    use DispatchesEvents;
+
+    public function doSomething(array $data): array
+    {
+        // Fire a notification event — no listeners need to exist
+        self::dispatch_event('something_happened', $data);
+
+        // Allow other plugins to modify $data before returning it
+        $data = self::dispatch_filter('beforeReturn', $data);
+
+        return $data;
+    }
+}
+```
+
+The full event name for `dispatch_event('something_happened', ...)` called from this class would be:
+
+```text
+leantime.plugins.myplugin.services.myplugin.doSomething.something_happened
+```

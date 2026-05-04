@@ -1,0 +1,116 @@
+---
+title: 'Update Leantime to the latest version'
+description: 'Step-by-step instructions for updating Leantime using a manual file replacement, the CLI system:update command, or by pulling a fresh Docker image.'
+---
+
+Leantime releases include both application code updates and, when needed, database migrations. The update process varies depending on how you installed Leantime. Choose the method that matches your setup below.
+
+<Warning>
+Always take a full backup of your database and uploaded files before updating. A failed update or an incompatible migration can leave your installation in a broken state, and a backup is the only guaranteed way to recover.
+</Warning>
+
+<Tabs>
+  <Tab title="Manual">
+    Use this method if you installed Leantime by uploading the release ZIP to a web server.
+
+    <Steps>
+      <Step title="Back up your database and files">
+        Export your database using your preferred tool. Also back up the `userfiles/` and `public/userfiles/` directories, which contain user-uploaded content.
+
+        ```bash
+        mysqldump -u leantime -p leantime > leantime_backup_$(date +%F).sql
+        tar -czf userfiles_backup_$(date +%F).tar.gz userfiles/ public/userfiles/
+        ```
+      </Step>
+      <Step title="Download the new release">
+        Go to the [Leantime releases page](https://github.com/Leantime/leantime/releases) and download the latest `Leantime-vX.X.X.zip`. Extract it locally.
+      </Step>
+      <Step title="Replace the application files">
+        Copy all files from the extracted archive into your server's Leantime directory, overwriting the existing files. Do not delete `config/.env` — it is not included in the release archive and your existing one will be preserved.
+
+        ```bash
+        cp -r /tmp/Leantime-vX.X.X/. /var/www/leantime/
+        ```
+      </Step>
+      <Step title="Run the database update (if prompted)">
+        If the new version includes database migrations, Leantime will redirect you to `https://yourdomain.com/update` on your next visit. Follow the on-screen instructions to apply the migrations.
+      </Step>
+      <Step title="Clear the application cache">
+        After a successful update, clear the cache to ensure the application uses the new code:
+
+        ```bash
+        php bin/leantime system:update
+        ```
+      </Step>
+    </Steps>
+  </Tab>
+
+  <Tab title="CLI">
+    Use this method when you have shell access to your server and want a single command to apply both application and database updates.
+
+    <Steps>
+      <Step title="Back up your database">
+        ```bash
+        mysqldump -u leantime -p leantime > leantime_backup_$(date +%F).sql
+        ```
+      </Step>
+      <Step title="Replace the application files">
+        Download and extract the new release archive, then overwrite the existing files on your server as described in the Manual tab. Keep your `config/.env` intact.
+      </Step>
+      <Step title="Run the CLI update command">
+        From your Leantime installation directory, run:
+
+        ```bash
+        php bin/leantime system:update
+        ```
+
+        This command applies any pending database migrations and clears the application cache in a single step.
+      </Step>
+    </Steps>
+  </Tab>
+
+  <Tab title="Docker">
+    Use this method if you are running Leantime via the official Docker image, either as a standalone container or with Docker Compose.
+
+    <Steps>
+      <Step title="Back up your database">
+        If your database is running in a Docker container, use `docker exec` to run the dump from inside the container:
+
+        ```bash
+        docker exec mysql_leantime mysqldump -u admin -p leantime > leantime_backup_$(date +%F).sql
+        ```
+
+        <Warning>
+        Before updating, confirm that your MySQL container was started with a named volume for `/var/lib/mysql`. If the database data directory is not mounted to a volume, stopping and removing the container will permanently delete all data.
+        </Warning>
+      </Step>
+      <Step title="Stop and remove the existing Leantime container">
+        ```bash
+        docker compose down
+        ```
+
+        Or, for a standalone container:
+
+        ```bash
+        docker stop leantime && docker rm leantime
+        ```
+
+        Your named volumes (`db_data`, `userfiles`, `public_userfiles`, `plugins`) are not removed by these commands — they persist independently of containers.
+      </Step>
+      <Step title="Pull the latest image">
+        ```bash
+        docker pull leantime/leantime:latest
+        ```
+
+        To update to a specific version, replace `latest` with the version tag (e.g. `leantime/leantime:3.6.2`).
+      </Step>
+      <Step title="Start the updated container">
+        ```bash
+        docker compose up -d
+        ```
+
+        Or re-run your original `docker run` command. The new container will connect to the existing volumes and apply any database migrations automatically on first boot.
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>

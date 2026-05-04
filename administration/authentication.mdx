@@ -1,0 +1,217 @@
+---
+title: 'Configure authentication in Leantime'
+description: 'Set up standard login, two-factor authentication, LDAP, OIDC, social login via Socialite, and API keys for your Leantime installation.'
+---
+
+Leantime supports multiple authentication methods that can be used independently or together. Standard username and password authentication is always available. LDAP, OIDC, and social login providers can be configured to let users sign in with their existing organizational credentials.
+
+<Tabs>
+  <Tab title="Standard login">
+    Standard login is built in and requires no configuration. Users sign in with the email address and password they registered with (or that an admin set via the UI or CLI).
+
+    To disable the login form entirely — for example, when all users sign in via SSO — set the following in your `config/.env`:
+
+    ```env
+    LEAN_DISABLE_LOGIN_FORM=true
+    ```
+
+    <Warning>
+    Only disable the login form if at least one alternative authentication method is fully configured and tested. Locking yourself out requires direct database access to recover.
+    </Warning>
+  </Tab>
+
+  <Tab title="Two-factor authentication">
+    Two-factor authentication (2FA) uses a time-based one-time password (TOTP) from an authenticator app.
+
+    **User setup**
+
+    Users enable 2FA from their profile under **My profile** > **Security**. They scan a QR code with an authenticator app (such as Google Authenticator, Authy, or 1Password) and confirm a one-time code.
+
+    **System-wide enforcement**
+
+    Administrators can require 2FA for all users. Enable this in **Admin panel** > **Settings** > **Security**. Users who have not yet enrolled are redirected to the 2FA setup flow on their next login.
+
+    <Tip>
+    System-wide 2FA enforcement is recommended for internet-facing installations.
+    </Tip>
+  </Tab>
+
+  <Tab title="LDAP">
+    LDAP integration lets users authenticate with their directory credentials. Both OpenLDAP (`OL`) and Active Directory (`AD`) are supported.
+
+    **Enable and connect**
+
+    ```env
+    LEAN_LDAP_USE_LDAP=true
+    LEAN_LDAP_LDAP_TYPE=OL           # OL for OpenLDAP, AD for Active Directory
+    LEAN_LDAP_HOST=ldap.example.com  # FQDN of your LDAP server
+    LEAN_LDAP_PORT=389               # Default port (use 636 for LDAPS)
+    LEAN_LDAP_URI=                   # Alternative: ldap://hostname:port
+    LEAN_LDAP_DN=CN=users,DC=example,DC=com  # Base DN for users
+    LEAN_LDAP_LDAP_DOMAIN=example.com        # Domain suffix for login (e.g. user@example.com)
+    ```
+
+    **Attribute mapping**
+
+    Map LDAP attributes to Leantime user fields. The examples below show OpenLDAP defaults; adjust for Active Directory as needed.
+
+    ```env
+    LEAN_LDAP_KEYS="{
+      \"username\": \"uid\",
+      \"groups\": \"memberOf\",
+      \"email\": \"mail\",
+      \"firstname\": \"displayname\",
+      \"lastname\": \"\",
+      \"phone\": \"telephoneNumber\",
+      \"jobTitle\": \"title\",
+      \"jobLevel\": \"level\",
+      \"department\": \"department\"
+    }"
+    ```
+
+    For Active Directory, replace `uid` with `cn` and `displayname` with `givenName`, and add `sn` for `lastname`.
+
+    **Default role and group mapping**
+
+    Set the Leantime role assigned to new users on first login:
+
+    ```env
+    LEAN_LDAP_DEFAULT_ROLE_KEY=20    # 20 = editor
+    ```
+
+    Optionally map LDAP groups to Leantime roles. The key is the Leantime role number:
+
+    ```env
+    LEAN_LDAP_GROUP_ASSIGNMENT="{
+      \"5\":  { \"ltRole\": \"readonly\",  \"ldapRole\": \"readonly\" },
+      \"10\": { \"ltRole\": \"commenter\", \"ldapRole\": \"commenter\" },
+      \"20\": { \"ltRole\": \"editor\",    \"ldapRole\": \"editor\" },
+      \"30\": { \"ltRole\": \"manager\",   \"ldapRole\": \"manager\" },
+      \"40\": { \"ltRole\": \"admin\",     \"ldapRole\": \"administrators\" },
+      \"50\": { \"ltRole\": \"owner\",     \"ldapRole\": \"administrators\" }
+    }"
+    ```
+
+    <Note>
+    Group assignment is applied on first login. Changes to a user's LDAP group membership are reflected on subsequent logins. You can also update a user's role manually in the admin panel after they have signed in.
+    </Note>
+  </Tab>
+
+  <Tab title="OIDC">
+    OpenID Connect lets users authenticate with any compliant identity provider.
+
+    **Required settings**
+
+    ```env
+    LEAN_OIDC_ENABLE=true
+    LEAN_OIDC_CLIENT_ID=your-client-id
+    LEAN_OIDC_CLIENT_SECRET=your-client-secret
+    LEAN_OIDC_PROVIDER_URL=https://your-provider.example.com/
+    ```
+
+    **User creation**
+
+    By default, only users who already exist in Leantime can sign in via OIDC. To automatically create a Leantime account for new users on their first login:
+
+    ```env
+    LEAN_OIDC_CREATE_USER=true
+    LEAN_OIDC_DEFAULT_ROLE=20    # 20 = editor
+    ```
+
+    **Optional overrides**
+
+    If your provider's discovery endpoint is not available or returns incorrect URLs, you can override individual endpoints:
+
+    ```env
+    LEAN_OIDC_AUTH_URL_OVERRIDE=
+    LEAN_OIDC_TOKEN_URL_OVERRIDE=
+    LEAN_OIDC_JWKS_URL_OVERRIDE=
+    LEAN_OIDC_USERINFO_URL_OVERRIDE=
+    ```
+
+    You can also override the certificate used for token validation:
+
+    ```env
+    LEAN_OIDC_CERTIFICATE_STRING=
+    LEAN_OIDC_CERTIFICATE_FILE=
+    ```
+
+    **Field mapping**
+
+    If your provider uses non-standard claim names, map them explicitly:
+
+    ```env
+    LEAN_OIDC_FIELD_EMAIL=email
+    LEAN_OIDC_FIELD_FIRSTNAME=given_name
+    LEAN_OIDC_FIELD_LASTNAME=family_name
+    LEAN_OIDC_FIELD_PHONE=phone_number
+    LEAN_OIDC_FIELD_JOBTITLE=title
+    LEAN_OIDC_FIELD_JOBLEVEL=level
+    LEAN_OIDC_FIELD_DEPARTMENT=department
+    ```
+
+    **Example: GitHub**
+
+    GitHub does not expose a standard OIDC discovery endpoint, so all URLs must be overridden:
+
+    ```env
+    LEAN_OIDC_PROVIDER_URL=https://token.actions.githubusercontent.com/
+    LEAN_OIDC_AUTH_URL_OVERRIDE=https://github.com/login/oauth/authorize
+    LEAN_OIDC_TOKEN_URL_OVERRIDE=https://github.com/login/oauth/access_token
+    LEAN_OIDC_USERINFO_URL_OVERRIDE=https://api.github.com/user,https://api.github.com/user/emails
+    LEAN_OIDC_SCOPES=user:email,read:user
+    LEAN_OIDC_FIELD_EMAIL=0.email
+    LEAN_OIDC_FIELD_FIRSTNAME=name
+    ```
+  </Tab>
+
+  <Tab title="Social login (Socialite)">
+    Leantime integrates with Laravel Socialite to support a wide range of OAuth providers. The following providers are available:
+
+    - Authentik
+    - Auth0
+    - Gitea
+    - GitHub
+    - GitLab
+    - Google
+    - Keycloak
+    - Microsoft
+    - Okta
+    - PropelAuth
+    - EduID
+    - SAML2
+
+    Each provider is configured through its own set of environment variables following your provider's OAuth application credentials. Refer to your identity provider's documentation for the client ID, client secret, and redirect URI values to use.
+
+    <Note>
+    Social login via Socialite is separate from the built-in OIDC integration. OIDC is a generic standard-compliant flow; Socialite providers use provider-specific OAuth adapters.
+    </Note>
+  </Tab>
+
+  <Tab title="API keys">
+    API keys allow external tools, scripts, and service accounts to authenticate with Leantime's JSON-RPC API without using a personal user session.
+
+    **Creating a system API key**
+
+    System API keys act as service accounts. You can create them in **Admin panel** > **API Keys**. Each key has:
+
+    - A **name** (used as the username in the `lt_{user}_{key}` format)
+    - A **secret** (used as the password)
+
+    The key format is:
+
+    ```
+    lt_{keyname}_{secret}
+    ```
+
+    Pass the key in the `x-api-key` request header when making API calls.
+
+    **Personal access tokens**
+
+    Individual users can generate personal access tokens if the **AdvancedAuth** plugin is installed. These tokens authenticate as the user who created them and use Laravel Sanctum under the hood. Pass them as a `Bearer` token in the `Authorization` header.
+
+    <Tip>
+    Use system API keys for automated integrations and CI/CD pipelines. Use personal access tokens for user-specific API access that should respect individual permissions.
+    </Tip>
+  </Tab>
+</Tabs>

@@ -1,0 +1,339 @@
+---
+title: 'Configure Leantime with environment variables'
+description: 'Full reference for every LEAN_* environment variable in config/.env, covering database, session, email, S3, LDAP, OIDC, Redis, and rate limiting.'
+---
+
+Leantime reads its configuration from a `config/.env` file or from environment variables set on the host (or in Docker). Environment variables take precedence over values in the `.env` file, which in turn take precedence over built-in defaults.
+
+Start by copying the sample file:
+
+```bash
+cp config/sample.env config/.env
+```
+
+Then edit `config/.env` with your values. All variable names use the `LEAN_` prefix.
+
+<AccordionGroup>
+  <Accordion title="Minimum required variables">
+    These variables must be set before Leantime can start. The installer will fail without them.
+
+    | Variable | Description | Example |
+    |---|---|---|
+    | `LEAN_DB_HOST` | Database hostname | `localhost` |
+    | `LEAN_DB_USER` | Database username | `leantime` |
+    | `LEAN_DB_PASSWORD` | Database password | `s3cr3t` |
+    | `LEAN_DB_DATABASE` | Database name | `leantime` |
+    | `LEAN_DB_PORT` | Database port | `3306` |
+    | `LEAN_EMAIL_RETURN` | Return email address for outgoing mail | `no-reply@yourdomain.com` |
+
+    `LEAN_APP_URL` is optional for a root-domain install but required when Leantime is in a subfolder or behind a reverse proxy:
+
+    | Variable | Description | Example |
+    |---|---|---|
+    | `LEAN_APP_URL` | Public base URL of the application | `https://pm.yourdomain.com` |
+    | `LEAN_APP_DIR` | Base path without trailing slash, for subfolder installs | `/leantime` |
+
+    ```ini
+    LEAN_APP_URL = 'https://pm.yourdomain.com'
+    LEAN_DB_HOST = 'localhost'
+    LEAN_DB_USER = 'leantime'
+    LEAN_DB_PASSWORD = 's3cr3t'
+    LEAN_DB_DATABASE = 'leantime'
+    LEAN_DB_PORT = '3306'
+    LEAN_EMAIL_RETURN = 'no-reply@yourdomain.com'
+    ```
+  </Accordion>
+
+  <Accordion title="Database driver and advanced connection options">
+    By default Leantime uses MySQL. You can switch to PostgreSQL by setting `LEAN_DB_DEFAULT_CONNECTION`.
+
+    | Variable | Default | Description |
+    |---|---|---|
+    | `LEAN_DB_DEFAULT_CONNECTION` | `mysql` | Database driver. Options: `mysql`, `pgsql` |
+    | `LEAN_DB_SCHEMA` | `public` | PostgreSQL schema (only when using `pgsql`) |
+    | `LEAN_DB_SSLMODE` | `prefer` | PostgreSQL SSL mode: `disable`, `allow`, `prefer`, `require`, `verify-ca`, `verify-full` |
+
+    Connection pool settings control how many database connections the application maintains:
+
+    | Variable | Default | Description |
+    |---|---|---|
+    | `LEAN_DB_PERSISTENT_CONNECTIONS` | `true` | Enable persistent connections for connection pooling |
+    | `LEAN_DB_MAX_CONNECTIONS` | `100` | Maximum connections in pool |
+    | `LEAN_DB_MIN_CONNECTIONS` | `1` | Minimum connections in pool |
+    | `LEAN_DB_CONNECTION_TIMEOUT` | `30` | Connection timeout in seconds |
+    | `LEAN_DB_IDLE_TIMEOUT` | `300` | Idle connection timeout in seconds |
+
+    ```ini
+    # To use PostgreSQL:
+    LEAN_DB_DEFAULT_CONNECTION = 'pgsql'
+    LEAN_DB_PORT = '5432'
+    LEAN_DB_SCHEMA = 'public'
+    LEAN_DB_SSLMODE = 'prefer'
+    ```
+  </Accordion>
+
+  <Accordion title="Session management">
+    | Variable | Default | Description |
+    |---|---|---|
+    | `LEAN_SESSION_PASSWORD` | _(required)_ | Secret used to sign and encrypt session cookies. Replace with a long random string. |
+    | `LEAN_SESSION_EXPIRATION` | `480` | Minutes of inactivity before automatic logout (480 = 8 hours) |
+    | `LEAN_SESSION_SECURE` | `false` | Set to `true` when serving over HTTPS to mark cookies as secure-only |
+
+    <Warning>
+    If you set `LEAN_SESSION_SECURE = true` but your application is not served over HTTPS, users will be unable to log in because the browser will not send the secure cookie over HTTP.
+    </Warning>
+
+    ```ini
+    LEAN_SESSION_PASSWORD = 'replace-with-a-long-random-secret'
+    LEAN_SESSION_EXPIRATION = 480
+    LEAN_SESSION_SECURE = true
+    ```
+  </Accordion>
+
+  <Accordion title="General and default settings">
+    | Variable | Default | Description |
+    |---|---|---|
+    | `LEAN_SITENAME` | `Leantime` | Display name shown in the browser title and UI |
+    | `LEAN_LANGUAGE` | `en-US` | Default language for new users |
+    | `LEAN_DEFAULT_TIMEZONE` | `America/Los_Angeles` | Default timezone for new users |
+    | `LEAN_LOG_PATH` | _(empty)_ | Custom log file path including filename. Defaults to `storage/logs/error.log` |
+    | `LEAN_LOG_CHANNELS` | `single,syslog,sentry` | Comma-separated logging channels: `single`, `syslog`, `sentry`, `stderr`. Use `stderr` for container environments. |
+    | `LEAN_DEBUG` | `0` | Set to `1` to enable debug mode. Do not enable in production. |
+    | `LEAN_DISABLE_LOGIN_FORM` | `false` | Hide the password login form. Useful when using LDAP or OIDC as the only auth method. |
+    | `LEAN_NEWS_ENABLED` | `true` | Set to `false` to disable the news service in air-gapped environments |
+
+    ```ini
+    LEAN_SITENAME = 'Acme Project Management'
+    LEAN_LANGUAGE = 'en-US'
+    LEAN_DEFAULT_TIMEZONE = 'Europe/Berlin'
+    LEAN_LOG_CHANNELS = 'stderr'
+    ```
+  </Accordion>
+
+  <Accordion title="Look and feel">
+    These values set the initial defaults. All can be overridden later through the administration UI.
+
+    | Variable | Default | Description |
+    |---|---|---|
+    | `LEAN_LOGO_PATH` | `/dist/images/logo.svg` | Path to the application logo displayed in the UI |
+    | `LEAN_PRINT_LOGO_URL` | `/dist/images/logo.png` | Logo URL for printed output (must be JPG or PNG) |
+    | `LEAN_DEFAULT_THEME` | `default` | Default theme. Built-in options: `default`, `minimal` |
+    | `LEAN_PRIMARY_COLOR` | `#006d9f` | Primary brand color used throughout the UI |
+    | `LEAN_SECONDARY_COLOR` | `#00a886` | Secondary brand color |
+
+    ```ini
+    LEAN_DEFAULT_THEME = 'minimal'
+    LEAN_PRIMARY_COLOR = '#2563eb'
+    LEAN_SECONDARY_COLOR = '#16a34a'
+    ```
+  </Accordion>
+
+  <Accordion title="File uploads (local)">
+    By default, Leantime stores uploaded files on the local filesystem.
+
+    | Variable | Default | Description |
+    |---|---|---|
+    | `LEAN_USER_FILE_PATH` | `userfiles/` | Relative path to store user-uploaded files |
+    | `LEAN_DB_BACKUP_PATH` | `backupdb/` | Relative path to store database backups |
+
+    <Note>
+    The web server process must have write permission to both paths. See [Manual installation](/installation/manual) for permission setup instructions.
+    </Note>
+
+    ```ini
+    LEAN_USER_FILE_PATH = 'userfiles/'
+    LEAN_DB_BACKUP_PATH = 'backupdb/'
+    ```
+  </Accordion>
+
+  <Accordion title="File uploads (S3-compatible storage)">
+    Enable S3 storage to store uploaded files on Amazon S3 or any S3-compatible service such as DigitalOcean Spaces or MinIO.
+
+    | Variable | Default | Description |
+    |---|---|---|
+    | `LEAN_USE_S3` | `false` | Set to `true` to use S3 instead of local file storage |
+    | `LEAN_S3_KEY` | _(empty)_ | S3 access key ID |
+    | `LEAN_S3_SECRET` | _(empty)_ | S3 secret access key |
+    | `LEAN_S3_BUCKET` | _(empty)_ | S3 bucket name |
+    | `LEAN_S3_REGION` | _(empty)_ | S3 region (e.g. `us-east-1`) |
+    | `LEAN_S3_FOLDER_NAME` | _(empty)_ | Optional subfolder within the bucket |
+    | `LEAN_S3_END_POINT` | `null` | Custom endpoint for S3-compatible services (e.g. `https://sfo2.digitaloceanspaces.com`) |
+    | `LEAN_S3_USE_PATH_STYLE_ENDPOINT` | `false` | Set to `true` for path-style URLs (`https://endpoint/bucket`) instead of virtual-hosted style |
+
+    ```ini
+    LEAN_USE_S3 = true
+    LEAN_S3_KEY = 'AKIAIOSFODNN7EXAMPLE'
+    LEAN_S3_SECRET = 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'
+    LEAN_S3_BUCKET = 'my-leantime-bucket'
+    LEAN_S3_REGION = 'us-east-1'
+    ```
+  </Accordion>
+
+  <Accordion title="Email and SMTP">
+    Without SMTP configured, Leantime uses PHP's built-in `mail()` function. Configure SMTP for reliable outbound email.
+
+    | Variable | Default | Description |
+    |---|---|---|
+    | `LEAN_EMAIL_RETURN` | _(required)_ | Return/from email address for all outgoing messages |
+    | `LEAN_EMAIL_USE_SMTP` | `false` | Set to `true` to send mail via SMTP instead of `mail()` |
+    | `LEAN_EMAIL_SMTP_HOSTS` | _(empty)_ | SMTP server hostname |
+    | `LEAN_EMAIL_SMTP_AUTH` | `true` | Require SMTP authentication |
+    | `LEAN_EMAIL_SMTP_USERNAME` | _(empty)_ | SMTP username |
+    | `LEAN_EMAIL_SMTP_PASSWORD` | _(empty)_ | SMTP password |
+    | `LEAN_EMAIL_SMTP_AUTO_TLS` | `true` | Automatically use TLS if the server supports it |
+    | `LEAN_EMAIL_SMTP_SECURE` | _(empty)_ | Force a specific security protocol: `TLS`, `SSL`, or `STARTTLS` |
+    | `LEAN_EMAIL_SMTP_SSLNOVERIFY` | `false` | Skip SSL certificate verification (use only with self-signed certs in dev) |
+    | `LEAN_EMAIL_SMTP_PORT` | _(empty)_ | SMTP port. Common values: `25`, `465`, `587`, `2526` |
+
+    ```ini
+    LEAN_EMAIL_RETURN = 'no-reply@yourdomain.com'
+    LEAN_EMAIL_USE_SMTP = true
+    LEAN_EMAIL_SMTP_HOSTS = 'smtp.mailgun.org'
+    LEAN_EMAIL_SMTP_AUTH = true
+    LEAN_EMAIL_SMTP_USERNAME = 'postmaster@yourdomain.com'
+    LEAN_EMAIL_SMTP_PASSWORD = 'smtp_password'
+    LEAN_EMAIL_SMTP_SECURE = 'TLS'
+    LEAN_EMAIL_SMTP_PORT = '587'
+    ```
+  </Accordion>
+
+  <Accordion title="LDAP integration">
+    Enable LDAP to allow users to log in with their corporate directory credentials.
+
+    | Variable | Default | Description |
+    |---|---|---|
+    | `LEAN_LDAP_USE_LDAP` | `false` | Set to `true` to enable LDAP authentication |
+    | `LEAN_LDAP_LDAP_TYPE` | `OL` | Directory type: `OL` (OpenLDAP) or `AD` (Active Directory) |
+    | `LEAN_LDAP_HOST` | _(empty)_ | LDAP server fully qualified domain name |
+    | `LEAN_LDAP_PORT` | `389` | LDAP port |
+    | `LEAN_LDAP_URI` | _(empty)_ | Alternative to host + port: full URI e.g. `ldap://hostname:389` |
+    | `LEAN_LDAP_DN` | _(empty)_ | User search base DN, e.g. `CN=users,DC=example,DC=com` |
+    | `LEAN_LDAP_LDAP_DOMAIN` | _(empty)_ | Domain suffix appended to the username at login |
+    | `LEAN_LDAP_DEFAULT_ROLE_KEY` | `20` | Default Leantime role assigned to new LDAP users (20 = editor) |
+    | `LEAN_LDAP_KEYS` | _(JSON)_ | JSON mapping from Leantime user attributes to LDAP attributes |
+    | `LEAN_LDAP_GROUP_ASSIGNMENT` | _(JSON)_ | JSON mapping from LDAP groups to Leantime roles |
+
+    **Attribute mapping for OpenLDAP:**
+
+    ```ini
+    LEAN_LDAP_KEYS="{
+      \"username\": \"uid\",
+      \"groups\": \"memberOf\",
+      \"email\": \"mail\",
+      \"firstname\": \"displayname\",
+      \"lastname\": \"\",
+      \"phone\": \"telephoneNumber\",
+      \"jobTitle\": \"title\",
+      \"jobLevel\": \"level\",
+      \"department\": \"department\"
+    }"
+    ```
+
+    **Attribute mapping for Active Directory:**
+
+    ```ini
+    LEAN_LDAP_KEYS="{
+      \"username\": \"cn\",
+      \"groups\": \"memberOf\",
+      \"email\": \"mail\",
+      \"firstname\": \"givenName\",
+      \"lastname\": \"sn\",
+      \"phone\": \"telephoneNumber\",
+      \"jobTitle\": \"title\",
+      \"jobLevel\": \"level\",
+      \"department\": \"department\"
+    }"
+    ```
+
+    **Group-to-role mapping:**
+
+    ```ini
+    LEAN_LDAP_GROUP_ASSIGNMENT="{
+      \"20\": { \"ltRole\": \"editor\", \"ldapRole\": \"editor\" },
+      \"30\": { \"ltRole\": \"manager\", \"ldapRole\": \"manager\" },
+      \"40\": { \"ltRole\": \"admin\", \"ldapRole\": \"administrators\" }
+    }"
+    ```
+  </Accordion>
+
+  <Accordion title="OpenID Connect (OIDC)">
+    Enable OIDC to allow single sign-on with any compatible identity provider.
+
+    | Variable | Default | Description |
+    |---|---|---|
+    | `LEAN_OIDC_ENABLE` | `false` | Set to `true` to enable OIDC |
+    | `LEAN_OIDC_CLIENT_ID` | _(empty)_ | Client ID registered with your identity provider |
+    | `LEAN_OIDC_CLIENT_SECRET` | _(empty)_ | Client secret from your identity provider |
+    | `LEAN_OIDC_PROVIDER_URL` | _(empty)_ | Base URL of your OIDC provider (used for well-known discovery) |
+    | `LEAN_OIDC_CREATE_USER` | `false` | Automatically create a Leantime account for users who do not yet exist |
+    | `LEAN_OIDC_DEFAULT_ROLE` | `20` | Default role for auto-created users (20 = editor) |
+
+    **Optional overrides** — these are read from the provider's well-known configuration automatically if not set:
+
+    | Variable | Description |
+    |---|---|
+    | `LEAN_OIDC_AUTH_URL_OVERRIDE` | Override the authorization endpoint URL |
+    | `LEAN_OIDC_TOKEN_URL_OVERRIDE` | Override the token endpoint URL |
+    | `LEAN_OIDC_JWKS_URL_OVERRIDE` | Override the JWKS endpoint URL |
+    | `LEAN_OIDC_USERINFO_URL_OVERRIDE` | Override the userinfo endpoint URL |
+    | `LEAN_OIDC_CERTIFICATE_STRING` | Inline RSA public key for token validation |
+    | `LEAN_OIDC_CERTIFICATE_FILE` | Path to RSA public key file for token validation |
+    | `LEAN_OIDC_SCOPES` | Override the requested scopes |
+    | `LEAN_OIDC_FIELD_EMAIL` | Claim name to map to the user's email address |
+    | `LEAN_OIDC_FIELD_FIRSTNAME` | Claim name to map to the user's first name |
+    | `LEAN_OIDC_FIELD_LASTNAME` | Claim name to map to the user's last name |
+    | `LEAN_OIDC_FIELD_PHONE` | Claim name to map to the user's phone number |
+    | `LEAN_OIDC_FIELD_JOBTITLE` | Claim name to map to the user's job title |
+    | `LEAN_OIDC_FIELD_JOBLEVEL` | Claim name to map to the user's job level |
+    | `LEAN_OIDC_FIELD_DEPARTMENT` | Claim name to map to the user's department |
+
+    **Example: GitHub as an OIDC provider:**
+
+    ```ini
+    LEAN_OIDC_ENABLE = true
+    LEAN_OIDC_CLIENT_ID = 'your_github_client_id'
+    LEAN_OIDC_CLIENT_SECRET = 'your_github_client_secret'
+    LEAN_OIDC_PROVIDER_URL = 'https://token.actions.githubusercontent.com/'
+    LEAN_OIDC_AUTH_URL_OVERRIDE = 'https://github.com/login/oauth/authorize'
+    LEAN_OIDC_TOKEN_URL_OVERRIDE = 'https://github.com/login/oauth/access_token'
+    LEAN_OIDC_USERINFO_URL_OVERRIDE = 'https://api.github.com/user,https://api.github.com/user/emails'
+    LEAN_OIDC_SCOPES = 'user:email,read:user'
+    LEAN_OIDC_FIELD_EMAIL = '0.email'
+    LEAN_OIDC_FIELD_FIRSTNAME = 'name'
+    ```
+  </Accordion>
+
+  <Accordion title="Redis (session storage and cache)">
+    Redis can replace file-based session storage and caching. This is recommended for production environments with multiple app instances or heavy traffic.
+
+    | Variable | Default | Description |
+    |---|---|---|
+    | `LEAN_USE_REDIS` | `false` | Set to `true` to use Redis for sessions and cache |
+    | `LEAN_REDIS_URL` | _(empty)_ | Full Redis URL: `tcp://1.2.3.4:6379` (append `?auth=password` if authentication is required) |
+    | `LEAN_REDIS_HOST` | _(empty)_ | Redis hostname (alternative to URL) |
+    | `LEAN_REDIS_PORT` | `6379` | Redis port |
+    | `LEAN_REDIS_PASSWORD` | _(empty)_ | Redis password |
+    | `LEAN_REDIS_SCHEME` | _(empty)_ | Connection scheme (e.g. `tcp`, `tls`) |
+
+    ```ini
+    LEAN_USE_REDIS = true
+    LEAN_REDIS_URL = 'tcp://redis.internal:6379?auth=strongpassword'
+    ```
+  </Accordion>
+
+  <Accordion title="Rate limiting">
+    Rate limits are enforced per IP address. Adjust these values if you have a high-traffic installation or are seeing false positives.
+
+    | Variable | Default | Description |
+    |---|---|---|
+    | `LEAN_RATELIMIT_GENERAL` | `1000` | Maximum requests per minute for general web traffic |
+    | `LEAN_RATELIMIT_API` | `10` | Maximum requests per minute for API endpoints |
+    | `LEAN_RATELIMIT_AUTH` | `20` | Maximum login attempts per minute |
+
+    ```ini
+    LEAN_RATELIMIT_GENERAL = 1000
+    LEAN_RATELIMIT_API = 100
+    LEAN_RATELIMIT_AUTH = 20
+    ```
+  </Accordion>
+</AccordionGroup>

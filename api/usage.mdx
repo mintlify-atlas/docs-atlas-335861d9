@@ -1,0 +1,400 @@
+---
+title: 'Call the Leantime API: examples and reference'
+description: 'Full request and response examples for tickets, projects, users, and timesheets, plus parameter rules, error codes, and multi-language code samples.'
+---
+
+This page walks through real API calls for the most common Leantime operations. Every example uses `POST /api/jsonrpc` with a JSON body. See the [overview](/api/overview) for endpoint details and [authentication](/api/authentication) for credential setup.
+
+## Request structure recap
+
+Every request must include `jsonrpc`, `method`, `params`, and `id`:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "leantime.rpc.{domain}.{method}",
+  "params": { "paramName": value },
+  "id": 1
+}
+```
+
+Parameters are matched to the service method's argument list **by name**. You can omit parameters that have default values. Extra keys in `params` are ignored.
+
+## Tickets
+
+Tickets are the core work item in Leantime — tasks, to-dos, and milestones all share the same service.
+
+### Get a single ticket
+
+<CodeGroup>
+
+```bash curl
+curl -X POST https://your-leantime.example.com/api/jsonrpc \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: lt_myuser_abc123secret" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "leantime.rpc.tickets.getTicket",
+    "params": { "id": 42 },
+    "id": 1
+  }'
+```
+
+```php PHP
+$body = [
+    'jsonrpc' => '2.0',
+    'method'  => 'leantime.rpc.tickets.getTicket',
+    'params'  => ['id' => 42],
+    'id'      => 1,
+];
+$response = $client->post('/api/jsonrpc', ['json' => $body]);
+```
+
+```javascript JavaScript
+const res = await fetch('/api/jsonrpc', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'x-api-key': 'lt_myuser_abc123secret' },
+  body: JSON.stringify({ jsonrpc: '2.0', method: 'leantime.rpc.tickets.getTicket', params: { id: 42 }, id: 1 }),
+});
+const { result } = await res.json();
+```
+
+</CodeGroup>
+
+**Response:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "id": 42,
+    "headline": "Set up CI pipeline",
+    "projectId": 5,
+    "status": 3,
+    "type": "task",
+    "userId": 2,
+    "dateToFinish": "2026-06-01 00:00:00"
+  },
+  "id": 1
+}
+```
+
+### Get all tickets for a project
+
+<CodeGroup>
+
+```bash curl
+curl -X POST https://your-leantime.example.com/api/jsonrpc \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: lt_myuser_abc123secret" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "leantime.rpc.tickets.getAll",
+    "params": { "searchCriteria": { "currentProject": 5 } },
+    "id": 2
+  }'
+```
+
+```php PHP
+$body = [
+    'jsonrpc' => '2.0',
+    'method'  => 'leantime.rpc.tickets.getAll',
+    'params'  => ['searchCriteria' => ['currentProject' => 5]],
+    'id'      => 2,
+];
+```
+
+```javascript JavaScript
+{ jsonrpc: '2.0', method: 'leantime.rpc.tickets.getAll', params: { searchCriteria: { currentProject: 5 } }, id: 2 }
+```
+
+</CodeGroup>
+
+### Create a ticket
+
+<CodeGroup>
+
+```bash curl
+curl -X POST https://your-leantime.example.com/api/jsonrpc \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: lt_myuser_abc123secret" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "leantime.rpc.tickets.addTicket",
+    "params": {
+      "values": {
+        "headline": "Write API docs",
+        "projectId": 5,
+        "status": 3,
+        "type": "task",
+        "description": "Document the JSON-RPC endpoint"
+      }
+    },
+    "id": 3
+  }'
+```
+
+```php PHP
+$body = [
+    'jsonrpc' => '2.0',
+    'method'  => 'leantime.rpc.tickets.addTicket',
+    'params'  => [
+        'values' => [
+            'headline'    => 'Write API docs',
+            'projectId'   => 5,
+            'status'      => 3,
+            'type'        => 'task',
+            'description' => 'Document the JSON-RPC endpoint',
+        ],
+    ],
+    'id' => 3,
+];
+```
+
+```javascript JavaScript
+{
+  jsonrpc: '2.0',
+  method: 'leantime.rpc.tickets.addTicket',
+  params: {
+    values: { headline: 'Write API docs', projectId: 5, status: 3, type: 'task' }
+  },
+  id: 3,
+}
+```
+
+</CodeGroup>
+
+**Response:** Returns the new ticket's ID on success.
+
+```json
+{ "jsonrpc": "2.0", "result": 87, "id": 3 }
+```
+
+### Update a ticket
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "leantime.rpc.tickets.updateTicket",
+  "params": {
+    "values": {
+      "id": 42,
+      "headline": "Set up CI pipeline (updated)",
+      "status": 5
+    }
+  },
+  "id": 4
+}
+```
+
+### Other useful ticket methods
+
+| Method | Description |
+|--------|-------------|
+| `leantime.rpc.tickets.getStatusLabels` | Get status label definitions for a project |
+| `leantime.rpc.tickets.getAllMilestones` | List milestones with optional search criteria |
+| `leantime.rpc.tickets.getAllSubtasks` | Get subtasks for a given ticket ID |
+| `leantime.rpc.tickets.getAllOpenUserTickets` | Open tickets assigned to a user |
+| `leantime.rpc.tickets.getKanbanColumns` | Get kanban column configuration |
+
+## Projects
+
+### Get all projects
+
+<CodeGroup>
+
+```bash curl
+curl -X POST https://your-leantime.example.com/api/jsonrpc \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: lt_myuser_abc123secret" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "leantime.rpc.projects.getAll",
+    "params": {},
+    "id": 5
+  }'
+```
+
+```php PHP
+$body = [
+    'jsonrpc' => '2.0',
+    'method'  => 'leantime.rpc.projects.getAll',
+    'params'  => [],
+    'id'      => 5,
+];
+```
+
+```javascript JavaScript
+{ jsonrpc: '2.0', method: 'leantime.rpc.projects.getAll', params: {}, id: 5 }
+```
+
+</CodeGroup>
+
+Pass `showClosedProjects: true` to include archived projects in the results.
+
+### Get a single project
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "leantime.rpc.projects.getProject",
+  "params": { "id": 5 },
+  "id": 6
+}
+```
+
+### Get project progress
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "leantime.rpc.projects.getProjectProgress",
+  "params": { "projectId": 5 },
+  "id": 7
+}
+```
+
+**Response:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "percent": 42.5,
+    "estimatedCompletionDate": "2026-09-15",
+    "plannedCompletionDate": ""
+  },
+  "id": 7
+}
+```
+
+### Create a project
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "leantime.rpc.projects.addProject",
+  "params": {
+    "values": {
+      "name": "My new project",
+      "details": "A short description",
+      "clientId": 1
+    }
+  },
+  "id": 8
+}
+```
+
+## Users
+
+### Get all users
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "leantime.rpc.users.getAll",
+  "params": { "activeOnly": true },
+  "id": 9
+}
+```
+
+### Get a user by ID
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "leantime.rpc.users.getUser",
+  "params": { "id": 3 },
+  "id": 10
+}
+```
+
+### Get a user by email
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "leantime.rpc.users.getUserByEmail",
+  "params": { "email": "alice@example.com" },
+  "id": 11
+}
+```
+
+## Timesheets
+
+### Log time on a ticket
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "leantime.rpc.timesheets.logTime",
+  "params": {
+    "ticketId": 42,
+    "params": {
+      "hours": 2.5,
+      "date": "2026-05-04",
+      "kind": "DEVELOPMENT",
+      "description": "Implemented auth middleware"
+    }
+  },
+  "id": 12
+}
+```
+
+### Punch in / punch out
+
+```json
+{ "jsonrpc": "2.0", "method": "leantime.rpc.timesheets.punchIn", "params": { "ticketId": 42 }, "id": 13 }
+```
+
+```json
+{ "jsonrpc": "2.0", "method": "leantime.rpc.timesheets.punchOut", "params": { "ticketId": 42 }, "id": 14 }
+```
+
+### Stop the active timer
+
+```json
+{ "jsonrpc": "2.0", "method": "leantime.rpc.timesheets.stopActiveTimer", "params": {}, "id": 15 }
+```
+
+## Parameters: rules and type casting
+
+- Parameters are matched by **name**, not position.
+- Parameters with default values in the service method are optional.
+- If a required parameter is missing, the API returns a `-32602 Invalid params` error.
+- Leantime attempts to cast parameter values to the type declared in the service method signature. If casting fails, the request is rejected.
+- Extra keys in `params` that do not match any method parameter are silently ignored.
+
+## Error codes
+
+Leantime follows the standard JSON-RPC 2.0 error code specification:
+
+| Code | Message | When it occurs |
+|------|---------|----------------|
+| `-32700` | Parse error | The request body is not valid JSON |
+| `-32600` | Invalid request | Missing `jsonrpc: "2.0"`, or an unsupported HTTP method (PATCH, DELETE) |
+| `-32601` | Method not found | The service class or method does not exist |
+| `-32602` | Invalid params | A required parameter is missing, null where not allowed, or cannot be cast |
+| `-32000` | Server error | An unhandled exception was thrown inside the service method |
+
+All error responses share the same shape:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "error": {
+    "code": -32602,
+    "message": "Invalid params",
+    "data": "Required Parameter Missing: id"
+  },
+  "id": 1
+}
+```
+
+## Discover available methods
+
+Any public method annotated with `@api` on a service class in `app/Domain/*/Services/` is callable via the API. The annotation is not enforced at runtime — it is a marker for which methods are considered stable public API. Browse the source code or search for `@api` in the services directory to find all available methods.
+
+<Tip>
+  The service class namespace is `Leantime\Domain\{Domain}\Services\{ServiceClass}`. The RPC method name maps as follows: `leantime.rpc.tickets.getTicket` → `Leantime\Domain\Tickets\Services\Tickets::getTicket()`.
+</Tip>

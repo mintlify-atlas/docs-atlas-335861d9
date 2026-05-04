@@ -1,0 +1,98 @@
+---
+title: "Manage tasks across views in Leantime"
+description: "Create, assign, and track to-dos in Leantime using kanban boards, Gantt timelines, table, list, and calendar views, with sprints, milestones, and subtasks."
+---
+
+Tasks in Leantime are called **to-dos**. They are the core unit of work inside a project — you can assign them to team members, set due dates and priorities, track time against them, link them to goals, and organize them into sprints. Every to-do lives inside a project and can be viewed in whichever format works best for your team.
+
+## Task views
+
+Leantime gives you five ways to look at your tasks. Switch between views using the view selector at the top of any to-do screen. Each view shows the same underlying data — choose the one that matches how you work.
+
+<CardGroup cols={2}>
+  <Card title="Kanban board" icon="columns-3">
+    Drag and drop cards between status columns. Each column maps to a status in your project's workflow. Great for visualizing flow and spotting bottlenecks.
+  </Card>
+  <Card title="Gantt / timeline" icon="chart-gantt">
+    See tasks laid out on a horizontal timeline with start and end dates. Milestones appear as distinct markers. Dependencies are shown as connecting arrows.
+  </Card>
+  <Card title="Table" icon="table">
+    A spreadsheet-style view where tasks are grouped by status. Quickly scan all fields in a row and edit values inline.
+  </Card>
+  <Card title="List" icon="list">
+    A compact vertical list of tasks. Useful for prioritized backlogs and quick scanning.
+  </Card>
+  <Card title="Calendar" icon="calendar">
+    Tasks appear on a monthly or weekly calendar based on their due date. Good for spotting deadline clusters and planning capacity.
+  </Card>
+</CardGroup>
+
+## Task fields
+
+When you open a task, you can fill in:
+
+- **Title** — a short description of the work
+- **Description** — rich text details, checklists, and embedded media
+- **Status** — where the task sits in your workflow (see [Status workflow](#status-workflow))
+- **Priority** — Low, Medium, High, or Urgent
+- **Assignee** — the team member responsible
+- **Due date** — when the task should be completed
+- **Estimated hours** — how long you expect the task to take
+- **Tags** — free-form labels for filtering and grouping
+- **Sprint** — which sprint the task belongs to
+- **Milestone** — an optional grouping marker on the timeline
+
+## Status workflow
+
+Each project has its own set of status labels, which you can customize in project settings. By default, statuses map to three underlying types:
+
+- **New** — work that hasn't started
+- **In progress** — actively being worked on
+- **Done** — completed
+
+The kanban board creates one column per status. Dragging a card between columns updates the status immediately.
+
+<Tip>
+  Admins and project managers can rename statuses, change their colors, and reorder them under **Project Settings > Statuses**. Status changes are reflected instantly across all views.
+</Tip>
+
+## Subtasks and dependencies
+
+You can add subtasks to any to-do. Subtasks appear nested under the parent task and each has its own status, assignee, and due date. There is no limit to how many subtasks you can create.
+
+Dependencies let you indicate that one task must be finished before another can begin. They appear as connecting lines on the Gantt view.
+
+## Sprint management
+
+Sprints are time-boxed periods (typically one or two weeks) that contain a focused set of tasks.
+
+<Steps>
+  <Step title="Create a sprint">
+    Go to **Sprints** in the project sidebar. Click **Add sprint**, give it a name, and set a start and end date.
+  </Step>
+  <Step title="Add tasks to a sprint">
+    Open any task and set the **Sprint** field, or drag tasks from the backlog into a sprint from the sprint planning view.
+  </Step>
+  <Step title="Run the sprint board">
+    The sprint board is a dedicated kanban view filtered to only the tasks in the active sprint. Use it during standups to track daily progress.
+  </Step>
+  <Step title="Complete the sprint">
+    When the sprint ends, incomplete tasks can be moved to the backlog or rolled into the next sprint.
+  </Step>
+</Steps>
+
+## Milestones
+
+Milestones mark significant points in a project, such as a release date or a phase deadline. They appear as distinct markers on the Gantt timeline and can have tasks associated with them.
+
+To create a milestone, open **Milestones** in the project sidebar and click **Add milestone**. Set a date and give it a name. Tasks can then reference a milestone via the milestone field.
+
+## Bulk actions and filtering
+
+You can filter the task list by assignee, status, priority, sprint, milestone, tag, or due date using the filter bar at the top of any view.
+
+To take action on multiple tasks at once, check the boxes next to the tasks you want to select. Available bulk actions include updating status, reassigning, moving to a sprint, and deleting.
+
+<Note>
+  Filters you apply are saved for your session. Clearing filters restores the full task list.
+</Note>

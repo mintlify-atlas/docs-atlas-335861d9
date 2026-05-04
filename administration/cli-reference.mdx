@@ -1,0 +1,294 @@
+---
+title: 'Leantime CLI command reference'
+description: 'Complete reference for all Leantime CLI commands including user management, plugin control, database operations, cache clearing, and system updates.'
+---
+
+Leantime includes a command-line interface built on top of the Laravel console. All commands are run from the Leantime root directory using `php bin/leantime`.
+
+```bash
+php bin/leantime [command] [options] [arguments]
+```
+
+<Note>
+Run `php bin/leantime list` to see all available commands, or append `--help` to any command to see its options and usage.
+</Note>
+
+## System commands
+
+### `system:update`
+
+Updates Leantime to the latest version by downloading the release from GitHub, extracting it, and applying the files.
+
+```bash
+php bin/leantime system:update
+```
+
+The update process:
+1. Checks the currently installed version against the latest GitHub release
+2. Backs up the database (skippable)
+3. Downloads and extracts the new release archive
+4. Disables all non-system plugins
+5. Copies new files over the existing installation
+6. Clears all caches (views, bootstrap, framework)
+7. Re-enables plugins
+
+**Options**
+
+| Option | Description |
+|---|---|
+| `--skipDbBackup` | Skip the automatic database backup step before applying the update. |
+
+<Warning>
+The updater requires the PHP `zip` extension. If it is not installed, the command will fail with a message prompting you to install it (e.g. `sudo apt install php-zip`).
+</Warning>
+
+## Database commands
+
+### `db:backup`
+
+Creates a MySQL dump of the Leantime database and saves it to the backup path defined in your configuration (`LEAN_DB_BACKUP_PATH`, default: `backupdb/`).
+
+```bash
+php bin/leantime db:backup
+```
+
+The backup file is named `{database_name}_{YYYY-MM-DD}.sql`. The backup directory is created automatically if it does not exist.
+
+<Note>
+This command requires `mysqldump` to be installed and accessible in your system PATH.
+</Note>
+
+---
+
+### `db:migrate`
+
+Runs any pending database migrations. Also serves as the database installer on fresh setups.
+
+Aliases: `db:install`, `db:update`
+
+```bash
+php bin/leantime db:migrate
+```
+
+When run against an uninitialized database, the command prompts for an admin account (email, password, name) and company name. Pass these as options for non-interactive use:
+
+```bash
+php bin/leantime db:migrate \
+  --email="admin@example.com" \
+  --password="SecurePass!" \
+  --first-name="Admin" \
+  --last-name="User" \
+  --company-name="Acme Corp"
+```
+
+**Options**
+
+| Option | Description |
+|---|---|
+| `--email` | Admin user email address. |
+| `--password` | Admin user password. |
+| `--first-name` | Admin user first name. |
+| `--last-name` | Admin user last name. |
+| `--company-name` | Company or organization name. |
+
+## User commands
+
+### `user:add`
+
+Creates a new user. Email, password, and role are required.
+
+```bash
+php bin/leantime user:add \
+  --email="jane@example.com" \
+  --password="SecurePass123!" \
+  --role="editor"
+```
+
+**Required options**
+
+| Option | Description |
+|---|---|
+| `--email` | The user's email address. Used as their login username. Must be a valid email format and must not already exist. |
+| `--password` | The user's initial password. |
+| `--role` | The user's role. One of: `readonly`, `commenter`, `editor`, `manager`, `admin`, `owner`. |
+
+**Optional options**
+
+| Option | Description |
+|---|---|
+| `--first-name` | User's first name. |
+| `--last-name` | User's last name. |
+| `--phone` | User's phone number. |
+| `--client-id` | ID of the client to assign the user to. If omitted, the first available client is used automatically. |
+
+## Plugin commands
+
+All plugin commands prompt for confirmation before making changes.
+
+### `plugin:list`
+
+Lists all plugins discovered by Leantime, including their installation and enabled status.
+
+```bash
+php bin/leantime plugin:list
+```
+
+**Options**
+
+| Option | Description |
+|---|---|
+| `--installed=true\|false` | Filter by installation status. |
+| `--enabled=true\|false` | Filter by enabled status. |
+| `--order-by` | Sort results by a plugin field (default: `name`). |
+
+**Examples**
+
+```bash
+# Show all plugins
+php bin/leantime plugin:list
+
+# Show only installed plugins
+php bin/leantime plugin:list --installed=true
+
+# Show installed and enabled plugins
+php bin/leantime plugin:list --installed=true --enabled=true
+```
+
+---
+
+### `plugin:install`
+
+Runs the install hook for a discovered plugin (database migrations, default settings). The plugin remains disabled until enabled separately.
+
+```bash
+php bin/leantime plugin:install PluginName
+```
+
+**Arguments**
+
+| Argument | Description |
+|---|---|
+| `plugin` | The plugin name (folder name or identifier). Required. |
+
+---
+
+### `plugin:enable`
+
+Enables an installed plugin so it loads on every request.
+
+```bash
+php bin/leantime plugin:enable PluginName
+```
+
+**Arguments**
+
+| Argument | Description |
+|---|---|
+| `plugin` | The plugin name. Required. The plugin must already be installed. |
+
+---
+
+### `plugin:disable`
+
+Disables an enabled plugin. The plugin's data is preserved.
+
+```bash
+php bin/leantime plugin:disable PluginName
+```
+
+**Arguments**
+
+| Argument | Description |
+|---|---|
+| `plugin` | The plugin name. Required. The plugin must currently be enabled. |
+
+---
+
+### `plugin:remove`
+
+Removes a plugin from the database registry. Does not delete the plugin folder or `.phar` file from disk.
+
+```bash
+php bin/leantime plugin:remove PluginName
+```
+
+**Arguments**
+
+| Argument | Description |
+|---|---|
+| `plugin` | The plugin name. Required. The plugin must be installed. |
+
+## Settings commands
+
+### `setting:save`
+
+Saves a system setting to the database. Creates the setting if it does not already exist.
+
+```bash
+php bin/leantime setting:save --key="setting.key" --value="value"
+```
+
+**Options**
+
+| Option | Description |
+|---|---|
+| `--key` | The setting key. Required. |
+| `--value` | The setting value. Required. |
+
+## Cache commands
+
+### `cache:clearAll`
+
+Clears all application caches: compiled views, language file cache, bootstrap cache, and framework path caches.
+
+```bash
+php bin/leantime cache:clearAll
+```
+
+---
+
+### `language:clear`
+
+Clears only the cached language files. Useful after adding or modifying translation strings.
+
+```bash
+php bin/leantime language:clear
+```
+
+## File commands
+
+### `files:cleanup`
+
+Removes uploaded files from storage that are no longer referenced in the database. Only files older than 24 hours are eligible for deletion.
+
+```bash
+php bin/leantime files:cleanup
+```
+
+Run a dry run first to preview what would be deleted without making any changes:
+
+```bash
+php bin/leantime files:cleanup --dry-run
+```
+
+**Options**
+
+| Option | Description |
+|---|---|
+| `--dry-run` | Preview orphaned files without deleting them. |
+
+## Email commands
+
+### `email:testemail`
+
+Sends a test email to verify your mail configuration is working correctly. Useful after changing SMTP settings.
+
+```bash
+php bin/leantime email:testemail --address="you@example.com"
+```
+
+**Options**
+
+| Option | Description |
+|---|---|
+| `--address` | Recipient email address for the test message. Required. |

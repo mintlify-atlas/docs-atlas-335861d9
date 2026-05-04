@@ -1,0 +1,130 @@
+---
+title: 'Manage users and roles in Leantime'
+description: 'Learn how to create users, assign roles and clients, control project access, and enforce two-factor authentication across your Leantime installation.'
+---
+
+Leantime gives administrators full control over who can access the system and what they can do. Users are assigned a role that determines system-wide permissions, a client for organizational grouping, and optionally direct access to specific projects.
+
+## User roles
+
+Every user in Leantime has exactly one role. Roles are system-wide — they cannot be customized or restricted per project. The available roles are:
+
+| Role | Description |
+|---|---|
+| **readonly** | Can view projects and tasks they have access to. Cannot create, edit, or comment. |
+| **commenter** | All readonly permissions, plus the ability to leave comments. |
+| **editor** | Can create and edit tasks, timesheets, and most project content. The default role for new users. |
+| **manager** | Can manage projects, sprints, and team assignments within projects they have access to. |
+| **admin** | Full access to all projects and system settings. Can manage users, plugins, and configuration. |
+| **owner** | The highest privilege level. Identical to admin but intended for the account owner. Cannot be removed by other admins. |
+
+<Note>
+Admins and owners bypass project-level access restrictions — they can see and edit all projects regardless of how those projects are configured.
+</Note>
+
+## Creating users
+
+<Tabs>
+  <Tab title="Via the UI">
+    <Steps>
+      <Step title="Open user management">
+        Navigate to **Admin panel** > **Users** from the main navigation.
+      </Step>
+      <Step title="Invite a new user">
+        Click **Add user** and fill in the required fields: email address, first and last name, role, and client assignment.
+      </Step>
+      <Step title="Save the user">
+        Click **Save**. The new user receives an invitation email with a link to set their password.
+      </Step>
+    </Steps>
+  </Tab>
+  <Tab title="Via the CLI">
+    Use the `user:add` command to create users non-interactively. Email, password, and role are required.
+
+    ```bash
+    php bin/leantime user:add \
+      --email="jane@example.com" \
+      --password="SecurePass123!" \
+      --role="editor" \
+      --first-name="Jane" \
+      --last-name="Smith" \
+      --client-id=1
+    ```
+
+    **Required options**
+
+    | Option | Description |
+    |---|---|
+    | `--email` | The user's email address (used as username). |
+    | `--password` | The user's initial password. |
+    | `--role` | One of: `readonly`, `commenter`, `editor`, `manager`, `admin`, `owner`. |
+
+    **Optional options**
+
+    | Option | Description |
+    |---|---|
+    | `--first-name` | User's first name. |
+    | `--last-name` | User's last name. |
+    | `--phone` | User's phone number. |
+    | `--client-id` | ID of the client to assign the user to. If omitted, the first available client is used. |
+
+    <Tip>
+    The CLI is useful for automated provisioning, scripted onboarding, or seeding users in a fresh installation.
+    </Tip>
+  </Tab>
+</Tabs>
+
+## Assigning users to clients
+
+Each user belongs to exactly one client. Clients are organizational groups — typically companies, departments, or teams — that let you segment access to projects.
+
+To change a user's client assignment, open the user's profile in **Admin panel** > **Users**, select the desired client from the **Client** dropdown, and save.
+
+<Note>
+A user must be assigned to a client before they can be added to client-restricted projects.
+</Note>
+
+## Project access and permissions
+
+Project visibility in Leantime is controlled by a per-project access type setting. There are three options:
+
+<AccordionGroup>
+  <Accordion title="Accessible to everyone">
+    All active users can see and work in the project, regardless of client or direct assignment. Use this for company-wide initiatives.
+  </Accordion>
+  <Accordion title="Client-restricted">
+    Only users belonging to the project's assigned client can access it. Other users — even editors or managers — cannot see the project unless they are admins or owners.
+  </Accordion>
+  <Accordion title="Directly assigned only">
+    Only users who have been individually added to the project can access it. This is the most restrictive option, suitable for sensitive or confidential work.
+  </Accordion>
+</AccordionGroup>
+
+To add a user directly to a project, open the project's **Settings** > **Team members** and search for the user to add.
+
+<Warning>
+Admins and owners always have access to all projects, regardless of the access type configured on the project.
+</Warning>
+
+## Deactivating users
+
+Deactivating a user prevents them from logging in without deleting their data or reassigning their tasks.
+
+To deactivate a user, open their profile in **Admin panel** > **Users** and set their status to **Inactive**. Their historical contributions — time logs, comments, tasks — remain intact and attributed to them.
+
+## Two-factor authentication
+
+Two-factor authentication (2FA) adds a second verification step at login using an authenticator app (such as Google Authenticator or Authy).
+
+<Tabs>
+  <Tab title="User-initiated 2FA">
+    Individual users can enable 2FA from their own profile settings under **My profile** > **Security**. After scanning the QR code with an authenticator app, they confirm a one-time code to activate 2FA on their account.
+  </Tab>
+  <Tab title="System-wide 2FA enforcement">
+    Administrators can require 2FA for all users system-wide. Enable this option in **Admin panel** > **Settings** > **Security**. Once enabled, users who have not yet configured 2FA will be prompted to set it up on their next login before they can proceed.
+  </Tab>
+</Tabs>
+
+<Tip>
+Enforcing 2FA system-wide is recommended for any installation that is accessible over the internet.
+</Tip>

@@ -1,0 +1,160 @@
+---
+title: 'Troubleshoot common Leantime issues'
+description: 'Fix common Leantime installation problems: database errors, file permissions, missing PHP extensions, session issues, and Docker plugin persistence.'
+---
+
+Most problems that occur during or after installation fall into a small number of categories. Find the symptom that matches your situation and follow the resolution steps.
+
+<AccordionGroup>
+  <Accordion title="Database connection error on install or startup">
+    **Symptom:** The installer or the application shows an error such as "could not connect to database", "SQLSTATE[HY000] [2002] Connection refused", or a blank page with no output.
+
+    **Causes and fixes:**
+
+    1. **Wrong credentials** — Open `config/.env` and verify that `LEAN_DB_HOST`, `LEAN_DB_USER`, `LEAN_DB_PASSWORD`, and `LEAN_DB_DATABASE` exactly match the values used when you created the database.
+
+    2. **Wrong host** — If Leantime and MySQL are running in separate Docker containers, `LEAN_DB_HOST` must be set to the container name or service name (e.g. `mysql_leantime`), not `localhost`. `localhost` resolves to the Leantime container itself, which does not run MySQL.
+
+    3. **Wrong port** — The default MySQL port is `3306`. PostgreSQL uses `5432`. Confirm `LEAN_DB_PORT` matches.
+
+    4. **MySQL not yet ready** — When using Docker Compose, Leantime may start before the MySQL container is healthy. The official Compose file includes a `depends_on` healthcheck condition, but if you are using a custom setup you may need to add a startup delay or retry logic.
+
+    5. **Database does not exist** — Connect to MySQL directly and confirm the database exists:
+       ```bash
+       mysql -u root -p -e "SHOW DATABASES;"
+       ```
+  </Accordion>
+
+  <Accordion title="File permission errors (userfiles, storage)">
+    **Symptom:** Uploading files fails silently, images do not appear, or you see errors containing "Permission denied" or "failed to open stream".
+
+    **Cause:** The web server process does not have write access to `userfiles/`, `public/userfiles/`, `storage/`, or `bootstrap/cache/`.
+
+    **Fix:** Set ownership and permissions so the web server user (`www-data` on most Debian/Ubuntu systems) can write to these directories:
+
+    ```bash
+    chown -R www-data:www-data /var/www/leantime
+    chmod -R 775 /var/www/leantime/userfiles \
+                 /var/www/leantime/public/userfiles \
+                 /var/www/leantime/storage \
+                 /var/www/leantime/bootstrap/cache
+    ```
+
+    If you are using a different user for PHP-FPM, replace `www-data` with that user. You can find the active PHP-FPM user in the pool configuration file (usually `/etc/php/8.x/fpm/pool.d/www.conf`).
+  </Accordion>
+
+  <Accordion title="PHP extension missing">
+    **Symptom:** A fatal error or a white screen with a message such as "Call to undefined function" or "Class not found", often referencing a specific PHP class from an extension like `GD`, `LDAP`, or `BCMath`.
+
+    **Fix:** Identify which extension is missing from the error message and install it. On Ubuntu/Debian:
+
+    ```bash
+    # Examples — install the extension matching your error
+    apt install php8.2-gd
+    apt install php8.2-ldap
+    apt install php8.2-bcmath
+    apt install php8.2-mbstring
+    apt install php8.2-zip
+    apt install php8.2-xml
+    ```
+
+    After installing, restart your web server and PHP-FPM:
+
+    ```bash
+    systemctl restart php8.2-fpm nginx
+    ```
+
+    The full list of required extensions is:
+
+    > BC Math, Ctype, cURL, DOM, Exif, Fileinfo, Filter, GD, Hash, LDAP, Multibyte String, MySQL, OPcache, OpenSSL, PCNTL, PCRE, PDO, Phar, Session, Tokenizer, Zip, SimpleXML
+
+    <Note>
+    The official Docker image includes all required extensions. This issue only affects manual server installations.
+    </Note>
+  </Accordion>
+
+  <Accordion title="Cannot log in / session or cookie problems">
+    **Symptom:** After entering valid credentials, the login page reloads without error, or you are immediately redirected back to the login page after a successful login.
+
+    **Cause:** This is almost always caused by a mismatch between `LEAN_SESSION_SECURE` and whether your site is served over HTTPS.
+
+    - If `LEAN_SESSION_SECURE = true` and your site is served over plain HTTP, the browser will refuse to send the secure cookie back to the server, which makes every request appear unauthenticated.
+    - If `LEAN_SESSION_SECURE = false` and your site is served over HTTPS, cookies will work but are not flagged as secure.
+
+    **Fix:**
+    - For HTTPS: set `LEAN_SESSION_SECURE = true`
+    - For HTTP (local or dev): set `LEAN_SESSION_SECURE = false`
+
+    Also verify that `LEAN_SESSION_PASSWORD` is set to a non-empty string in `config/.env`. A missing or empty session password prevents sessions from being signed correctly.
+  </Accordion>
+
+  <Accordion title="IIS: 405 Method Not Allowed on certain actions">
+    **Symptom:** Some Leantime actions fail with a 405 error on IIS, typically when editing or updating records.
+
+    **Cause:** IIS blocks the `PATCH` HTTP method by default, and Leantime's API uses `PATCH` for updates.
+
+    **Fix:** Add `PATCH` to the list of allowed verbs for the PHP handler in IIS:
+
+    1. Open IIS Manager and select the Leantime site.
+    2. Double-click **Handler Mappings**, then double-click the PHP handler.
+    3. Click **Request Restrictions** > **Verbs** tab.
+    4. Select **One of the following verbs** and add `PATCH` to the list (e.g. `GET,HEAD,POST,PATCH`).
+    5. In the **Executable** field, wrap the path to `php-cgi.exe` in double quotes if it contains a space.
+    6. Click **OK**, then **Yes** when prompted to create a FastCGI application.
+
+    <Note>
+    You may need to repeat this step after each PHP upgrade on IIS.
+    </Note>
+  </Accordion>
+
+  <Accordion title="Docker: plugins disappear after container restart">
+    **Symptom:** Plugins you installed via the admin panel are gone the next time you restart the Docker container.
+
+    **Cause:** The `app/Plugins` directory inside the container is not mounted to a persistent volume. When the container is replaced or restarted from a fresh image, the container's writable layer is reset.
+
+    **Fix:** Mount the plugins directory to a named Docker volume. Add the following to your `docker run` command:
+
+    ```bash
+    -v plugins:/var/www/html/app/Plugins
+    ```
+
+    Or, in Docker Compose:
+
+    ```yaml
+    volumes:
+      - plugins:/var/www/html/app/Plugins
+
+    # At the top-level volumes key:
+    volumes:
+      plugins:
+    ```
+
+    Also ensure the `www-data` user inside the container has write access to the mounted directory. The official Docker image sets this up automatically when using named volumes.
+  </Accordion>
+
+  <Accordion title="Reverse proxy: redirect loops or wrong domain in URLs">
+    **Symptom:** After placing Leantime behind a reverse proxy (Nginx, Traefik, Caddy), clicking links redirects to `http://localhost:8080`, or you encounter an infinite redirect loop.
+
+    **Cause:** Leantime does not know its public URL and generates internal addresses instead.
+
+    **Fix:** Set `LEAN_APP_URL` to your public domain:
+
+    ```ini
+    LEAN_APP_URL = 'https://pm.yourdomain.com'
+    ```
+
+    In Docker:
+
+    ```bash
+    -e LEAN_APP_URL=https://pm.yourdomain.com
+    ```
+
+    If the redirect loop persists after setting the URL, check whether your reverse proxy is sending the correct `Host`, `X-Forwarded-For`, and `X-Forwarded-Proto` headers. Leantime uses these headers to determine the request scheme and host.
+
+    You can also configure trusted proxies in `config/.env` to restrict which upstream IPs are trusted:
+
+    ```ini
+    LEAN_TRUSTED_PROXIES = '127.0.0.1,REMOTE_ADDR'
+    ```
+  </Accordion>
+</AccordionGroup>

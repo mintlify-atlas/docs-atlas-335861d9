@@ -1,0 +1,348 @@
+---
+title: "Leantime architecture for plugin developers"
+description: "Understand Leantime's domain structure, layer rules, controller patterns, routing, templates, and DI to build plugins that fit naturally into the codebase."
+---
+
+Leantime is built on Laravel 11 with a domain-driven structure. Understanding how the pieces fit together — domains, layers, routing, templates, and dependency injection — will help you write plugins that integrate cleanly with core code and stay maintainable as the codebase evolves.
+
+## Domain-driven structure
+
+All application logic lives in `app/Domain/`. Leantime ships with 56 domains; each one is a self-contained vertical slice of functionality.
+
+```text
+app/Domain/
+├── Tickets/
+│   ├── Controllers/         # HTTP request handlers
+│   ├── Hxcontrollers/       # HTMX partial controllers
+│   ├── Services/            # business logic
+│   ├── Repositories/        # data access
+│   ├── Models/              # data structures
+│   ├── Templates/           # Blade and legacy .tpl.php views
+│   ├── Listeners/           # event listener classes
+│   ├── Js/                  # domain JavaScript
+│   ├── Composers/           # view composers
+│   └── register.php         # event/filter listener registration
+├── Projects/
+├── Users/
+└── ...
+```
+
+Plugin domains follow the same layout and live in `app/Plugins/YourPlugin/`. The framework discovers controllers, routes, and templates in your plugin folder using the same conventions it applies to core domains.
+
+## Layer rules
+
+Leantime enforces a strict three-layer contract. Violating it creates tight coupling that is hard to test and makes plugins fragile across upgrades.
+
+| Layer | Responsibility | May call |
+|---|---|---|
+| **Controllers** | Handle HTTP requests; delegate to services | Services only — never Repositories |
+| **Services** | Business logic, validation, event dispatch | Repositories and other Services (with care — circular deps are possible) |
+| **Repositories** | Data access; wrap SQL or Query Builder | Database only |
+
+<Warning>
+  If you find yourself calling a Repository directly from a Controller, move that logic into a Service. This is a hard rule in Leantime's coding guidelines.
+</Warning>
+
+## Controller patterns
+
+Two controller patterns coexist in Leantime. Use the modern pattern for all new plugin code.
+
+### Modern controller (get / post)
+
+Extend `Leantime\Core\Controller\Controller`. Declare `get()` and `post()` as separate methods — each receives a `$params` array and returns a `Symfony\Component\HttpFoundation\Response`.
+
+Use `init()` for dependency injection instead of `__construct()`. The framework calls `init()` after the controller is resolved from the container.
+
+```php
+<?php
+
+namespace Leantime\Plugins\MyPlugin\Controllers;
+
+use Leantime\Core\Controller\Controller;
+use Leantime\Plugins\MyPlugin\Services\MyPlugin as MyPluginService;
+use Symfony\Component\HttpFoundation\Response;
+
+class Show extends Controller
+{
+    private MyPluginService $myPluginService;
+
+    public function init(MyPluginService $myPluginService): void
+    {
+        $this->myPluginService = $myPluginService;
+    }
+
+    public function get(array $params): Response
+    {
+        $data = $this->myPluginService->getData($params);
+        $this->tpl->assign('data', $data);
+
+        return $this->tpl->display('myplugin.show');
+    }
+
+    public function post(array $params): Response
+    {
+        $this->myPluginService->save($_POST);
+
+        return $this->tpl->display('myplugin.show');
+    }
+}
+```
+
+### HTMX controller (HtmxController)
+
+For HTMX partial requests extend `Leantime\Core\Controller\HtmxController`. HTMX controllers live in `Hxcontrollers/` and always render a Blade partial — the view is declared as a class property, not returned from a method.
+
+```php
+<?php
+
+namespace Leantime\Plugins\MyPlugin\Hxcontrollers;
+
+use Leantime\Core\Controller\HtmxController;
+use Leantime\Plugins\MyPlugin\Services\MyPlugin as MyPluginService;
+
+class ItemCard extends HtmxController
+{
+    // Required: identifies the Blade partial to render
+    protected static string $view = 'myplugin::partials.itemCard';
+
+    private MyPluginService $myPluginService;
+
+    // DI via init(), NOT __construct()
+    public function init(MyPluginService $myPluginService): void
+    {
+        $this->myPluginService = $myPluginService;
+    }
+
+    public function get(array $params): void
+    {
+        $item = $this->myPluginService->getItem($params['id']);
+        $this->tpl->assign('item', $item);
+    }
+
+    public function save(): void
+    {
+        $this->myPluginService->saveItem($_POST);
+        $this->tpl->setNotification('Saved!', 'success');
+        $this->setHTMXEvent('HTMX.ShowNotification');
+    }
+}
+```
+
+<Tip>
+  Use HTMX controllers for any content that loads asynchronously. The main page controller should load only minimal data; HTMX partials handle the rest. New async work should use HTMX, not jQuery AJAX.
+</Tip>
+
+### Legacy controller (run)
+
+Older core controllers use a single `run()` method that checks `$_POST` / `$_GET` directly. You will encounter this pattern in the codebase but should not use it for new plugin code.
+
+## URL routing
+
+Leantime has two routing systems. Use Laravel routes for new plugin code.
+
+### Frontcontroller (legacy, convention-based)
+
+Most requests still go through the legacy Frontcontroller, which maps URL segments to classes by convention:
+
+```text
+/module/action           → Domain\{Module}\Controllers\{Action}::get()|post()
+/module/action/id        → Domain\{Module}\Controllers\{Action}::get()|post() with id param
+/hx/module/action        → Domain\{Module}\Hxcontrollers\{Action}
+```
+
+For plugins, the same convention applies with `Plugins\{Plugin}` as the namespace root. Resolution order: Domain Controllers → Domain Hxcontrollers → Plugin Controllers → Plugin Hxcontrollers.
+
+### Laravel routes (preferred for new code)
+
+Add a `routes.php` file to your plugin. `RouteLoader` picks it up automatically alongside domain routes.
+
+```php
+<?php
+
+use Illuminate\Support\Facades\Route;
+use Leantime\Plugins\MyPlugin\Controllers\Show;
+
+Route::get('/myplugin/show', [Show::class, 'get']);
+Route::post('/myplugin/show', [Show::class, 'post']);
+```
+
+### Request types
+
+Leantime auto-detects the request type and provides an appropriately typed request object:
+
+- `IncomingRequest` — standard web requests
+- `ApiRequest` — API requests (`getAPIKey()`, `getBearerToken()`)
+- `HtmxRequest` — HTMX requests (`isBoosted()`, `getTarget()`, `getTriggerName()`)
+
+## Template system
+
+Leantime uses two template engines; prefer Blade for all new plugin templates.
+
+### Blade templates (preferred)
+
+Blade templates end in `.blade.php`. Assign variables from a controller using `$this->tpl->assign('key', $value)` and access them in the template as `$key`.
+
+```blade
+{{-- app/Plugins/MyPlugin/Templates/show.blade.php --}}
+
+@extends('global::layouts.app')
+
+@section('content')
+<div class="maincontent">
+    <x-global::pageheader :title="__('myplugin.page.title')" />
+
+    <p>{{ $data['description'] }}</p>
+</div>
+@endsection
+```
+
+**Shared Blade components** from `app/Views/Templates/components/` are available everywhere using the `x-global::` prefix:
+
+```blade
+<x-global::pageheader :title="'My Plugin'" />
+<x-global::loader />
+<x-global::loadingText />
+```
+
+### Legacy PHP templates (.tpl.php)
+
+Older templates use `$tpl->get('variable')` to read assigned variables. You can use them, but new plugins should use Blade.
+
+### Rendering methods
+
+Call these on `$this->tpl` from a controller:
+
+| Method | When to use |
+|---|---|
+| `display($template, $layout, $code)` | Full page render with layout |
+| `displayPartial($template)` | Render without a layout wrapper |
+| `displayFragment($viewPath, $fragment)` | HTMX fragment rendering |
+| `emptyResponse()` | Return an empty HTTP response |
+
+## Dependency injection
+
+Leantime uses Laravel's service container for DI. The pattern for controllers and HTMX controllers is `init()`, not `__construct()`.
+
+```php
+// In any controller or HtmxController
+public function init(MyService $svc, AnotherService $other): void
+{
+    $this->svc   = $svc;
+    $this->other = $other;
+}
+```
+
+For services and repositories, use constructor injection with PHP 8 promoted properties:
+
+```php
+<?php
+
+namespace Leantime\Plugins\MyPlugin\Services;
+
+use Leantime\Core\Events\DispatchesEvents;
+use Leantime\Plugins\MyPlugin\Repositories\MyPlugin as MyPluginRepository;
+
+class MyPlugin
+{
+    use DispatchesEvents;
+
+    public function __construct(
+        private readonly MyPluginRepository $repository,
+    ) {}
+
+    /**
+     * Returns all items for display.
+     *
+     * @api
+     */
+    public function getData(array $params): array
+    {
+        $data = $this->repository->getAll($params);
+
+        // Allow other plugins to modify the result
+        return self::dispatch_filter('beforeReturn', $data, $params);
+    }
+}
+```
+
+Resolve dependencies anywhere using the service container helper:
+
+```php
+$service = app()->make(\Leantime\Plugins\MyPlugin\Services\MyPlugin::class);
+```
+
+## JSON-RPC API exposure
+
+Any public method on a service class is callable via Leantime's JSON-RPC 2.0 API at:
+
+```json
+{
+    "method": "leantime.rpc.{Domain}.{ServiceName}.{methodName}",
+    "params": { "paramName": "value" },
+    "id": 1
+}
+```
+
+Add the `@api` PHPDoc annotation to methods you intend to expose. The annotation is documentation-only — it is not enforced at runtime — but it signals intent and is required by Leantime's coding guidelines.
+
+```php
+/**
+ * Returns all items.
+ *
+ * @api
+ */
+public function getAll(): array
+{
+    return $this->repository->getAll();
+}
+```
+
+For a plugin service at `Leantime\Plugins\MyPlugin\Services\MyPlugin`, the RPC method name is:
+
+```text
+leantime.rpc.Plugins.MyPlugin.getAll
+```
+
+## Database and repositories
+
+Repositories extend `Leantime\Core\Db\Repository` and use raw SQL or Laravel Query Builder depending on when they were written. All database tables use the `zp_` prefix (e.g. `zp_projects`, `zp_users`).
+
+```php
+<?php
+
+namespace Leantime\Plugins\MyPlugin\Repositories;
+
+use Illuminate\Support\Facades\DB;
+use Leantime\Core\Db\Repository;
+
+class MyPlugin extends Repository
+{
+    public function getAll(array $params = []): array
+    {
+        return DB::table('zp_myplugin_items')
+            ->where('projectId', $params['projectId'] ?? 0)
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->toArray();
+    }
+}
+```
+
+<Note>
+  Leantime's data layer is planned for migration to Doctrine. For now, use the existing Repository pattern with raw SQL or Laravel Query Builder rather than Eloquent ORM.
+</Note>
+
+## Application boot sequence
+
+Knowing the boot order helps you decide where to hook.
+
+1. `public/index.php` creates the application and dispatches to `HttpKernel` or `ConsoleKernel`.
+2. HttpKernel bootstrappers run: `LoadEnvironmentVariables`, `LoadConfig` (custom), `HandleExceptions`, `RegisterFacades`, `RegisterProviders`, `BootProviders`.
+3. `discoverListeners()` scans `app/Domain/*/register.php` and system plugin `register.php` files.
+4. The middleware pipeline executes in order. Key middleware positions:
+   - **Position 5** — `LoadPlugins`: user plugin `register.php` files load here.
+   - **Position 6** — `InitialHeaders`: security headers applied (filterable by plugins).
+   - **Position 7** — `AuthCheck`: authentication validated.
+5. Routing: Laravel routes are tried first; unmatched requests fall back to the Frontcontroller.
+
+Plugin middleware registered via `$registration->registerMiddleware()` runs in a second pipeline after the core middleware stack, immediately before route dispatch.

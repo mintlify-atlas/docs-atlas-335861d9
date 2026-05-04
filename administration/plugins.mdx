@@ -1,0 +1,151 @@
+---
+title: 'Install and manage Leantime plugins'
+description: 'Learn how to install marketplace, custom folder, and system plugins in Leantime, manage license keys, and use CLI commands to enable or disable plugins.'
+---
+
+Plugins extend Leantime with additional features without modifying core files. You can install plugins from the Leantime marketplace, load your own custom plugins from a folder, or designate certain plugins as system-level so they load automatically at startup.
+
+## Plugin types
+
+<AccordionGroup>
+  <Accordion title="Marketplace plugins">
+    Purchased from [marketplace.leantime.io](https://marketplace.leantime.io). Delivered as `.phar` packages and require a license key to install. Marketplace plugins are validated daily against the license server. If your active user count exceeds the license limit, the plugin is automatically disabled (your data is retained).
+  </Accordion>
+  <Accordion title="Custom folder plugins">
+    Any folder placed in `app/Plugins/` is treated as a plugin. This is the format used for in-house plugins and plugins under active development. They do not require a license key.
+  </Accordion>
+  <Accordion title="System plugins">
+    Defined by the `LEAN_PLUGINS` environment variable. System plugins are loaded at application boot — before the middleware stack — and cannot be disabled through the UI. Use this for plugins that must always be active, such as authentication extensions or core integrations.
+
+    ```env
+    LEAN_PLUGINS=PluginOne,PluginTwo
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Installing plugins from the marketplace
+
+<Steps>
+  <Step title="Purchase the plugin">
+    Browse [marketplace.leantime.io](https://marketplace.leantime.io) and complete the purchase. You will receive a license key.
+  </Step>
+  <Step title="Navigate to plugin management">
+    In Leantime, go to **Admin panel** > **Plugins**.
+  </Step>
+  <Step title="Enter the license key">
+    Click **Add plugin**, paste your license key, and confirm. Leantime downloads and installs the `.phar` package.
+  </Step>
+  <Step title="Enable the plugin">
+    After installation, enable the plugin from the plugin list or run:
+
+    ```bash
+    php bin/leantime plugin:enable PluginName
+    ```
+  </Step>
+</Steps>
+
+## Installing custom folder plugins
+
+Place your plugin folder directly in `app/Plugins/`. Leantime discovers it automatically on the next page load or when you navigate to **Admin panel** > **Plugins**.
+
+```
+app/
+└── Plugins/
+    └── MyPlugin/
+        ├── composer.json
+        ├── register.php
+        └── ...
+```
+
+After the folder is in place, install and enable the plugin:
+
+```bash
+php bin/leantime plugin:install MyPlugin
+php bin/leantime plugin:enable MyPlugin
+```
+
+### Docker installations
+
+In Docker, the `app/Plugins/` directory is inside the container. To persist plugins across container restarts, mount the directory as a named volume in your `docker-compose.yml`:
+
+```yaml
+services:
+  leantime:
+    image: leantime/leantime:latest
+    volumes:
+      - plugins:/var/www/html/app/Plugins
+volumes:
+  plugins:
+```
+
+<Warning>
+If you do not mount the plugins volume, any plugins installed through the UI or CLI will be lost when the container is recreated or updated.
+</Warning>
+
+## Managing plugins via CLI
+
+All plugin CLI commands are run from the Leantime root directory using `php bin/leantime`.
+
+### List plugins
+
+```bash
+php bin/leantime plugin:list
+```
+
+Filter the list with options:
+
+```bash
+# Show only installed plugins
+php bin/leantime plugin:list --installed=true
+
+# Show only enabled plugins
+php bin/leantime plugin:list --enabled=true
+
+# Show installed and enabled plugins
+php bin/leantime plugin:list --installed=true --enabled=true
+```
+
+### Enable a plugin
+
+```bash
+php bin/leantime plugin:enable PluginName
+```
+
+The plugin must already be installed. You will be asked to confirm before the change is applied.
+
+### Disable a plugin
+
+```bash
+php bin/leantime plugin:disable PluginName
+```
+
+Disabling a plugin stops it from loading but does not remove its data.
+
+### Install a plugin
+
+```bash
+php bin/leantime plugin:install PluginName
+```
+
+Runs the plugin's install hook (database migrations, default settings). The plugin remains disabled until you explicitly enable it.
+
+### Remove a plugin
+
+```bash
+php bin/leantime plugin:remove PluginName
+```
+
+Removes the plugin from the database registry. The plugin folder or phar file is not deleted from disk. Use this to fully unregister a plugin you are no longer using.
+
+## License key management
+
+Marketplace plugin licenses are **perpetual** — they do not expire. However, each license is restricted to a maximum number of active users.
+
+- Leantime checks your active user count daily against the license server.
+- If user count exceeds the license limit, the plugin is disabled automatically.
+- Data created by the plugin is not deleted.
+- Re-enabling is possible after reducing active users or upgrading the license.
+
+<Tip>
+You can deactivate users you no longer need in **Admin panel** > **Users** to stay within your license limit.
+</Tip>

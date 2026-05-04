@@ -1,0 +1,167 @@
+---
+title: "Get Leantime running in under 10 minutes"
+description: "Install Leantime via Docker or a manual PHP setup, run the web installer, and create your first project — all covered in one guide."
+---
+
+Leantime runs on a standard LAMP/LEMP stack or inside a Docker container. This guide walks you through both paths so you can pick whichever fits your environment, then guides you through the post-install setup to get your first project running.
+
+<Tabs>
+  <Tab title="Docker (fastest)">
+    Docker is the quickest way to get Leantime running. The official image on Docker Hub bundles the app and handles all PHP dependencies for you — you only need to supply a MySQL database and a few environment variables.
+
+    <Steps>
+      <Step title="Create a Docker network">
+        Leantime and MySQL need to communicate. Create a shared network first.
+
+        ```bash
+        docker network create leantime-net
+        ```
+      </Step>
+
+      <Step title="Start a MySQL container">
+        If you don't already have a MySQL 8.0+ instance, start one on the same network.
+
+        ```bash
+        docker run -d --restart unless-stopped \
+          --network leantime-net \
+          --name mysql_leantime \
+          -e MYSQL_ROOT_PASSWORD=rootpassword \
+          -e MYSQL_DATABASE=leantime \
+          -e MYSQL_USER=admin \
+          -e MYSQL_PASSWORD=321.qwerty \
+          -v leantime-mysql-data:/var/lib/mysql \
+          mysql:8.0
+        ```
+
+        <Note>
+          The `-v` flag mounts a named volume so your data persists across container restarts. Don't skip this for production.
+        </Note>
+      </Step>
+
+      <Step title="Start the Leantime container">
+        Run the official image, pointing it at the MySQL container with environment variables.
+
+        ```bash
+        docker run -d --restart unless-stopped -p 8080:8080 --network leantime-net \
+          -e LEAN_DB_HOST=mysql_leantime \
+          -e LEAN_DB_USER=admin \
+          -e LEAN_DB_PASSWORD=321.qwerty \
+          -e LEAN_DB_DATABASE=leantime \
+          -e LEAN_EMAIL_RETURN=changeme@local.local \
+          --name leantime leantime/leantime:latest
+        ```
+
+        Replace `LEAN_EMAIL_RETURN` with a real email address. All configuration variables from `config/.env` can be passed as environment variables with the same `LEAN_` prefix.
+
+        <Tip>
+          If you're placing Leantime behind a reverse proxy, also pass `-e LEAN_APP_URL=https://yourdomain.com` so internal redirects resolve correctly.
+        </Tip>
+
+        <Warning>
+          If you plan to use plugins, mount the plugins folder so it survives container restarts: add `-v plugins:/var/www/html/app/Plugins` to the command above and make sure the `www-data` user has write access.
+        </Warning>
+      </Step>
+
+      <Step title="Run the web installer">
+        Open your browser and navigate to `http://localhost:8080/install`. The installer will set up the database schema and prompt you to create the first admin account.
+      </Step>
+    </Steps>
+
+    For a production-ready setup with Compose including all volumes and a mail server, see the [Docker installation guide](/installation/docker).
+  </Tab>
+
+  <Tab title="Manual">
+    The manual path gives you full control over the web server and PHP configuration. You'll need PHP 8.2+, a MySQL 8.0+ or MariaDB 10.6+ database, and Apache or Nginx already configured. Check [system requirements](/getting-started/system-requirements) first.
+
+    <Steps>
+      <Step title="Download the release package">
+        Go to the [Leantime releases page](https://github.com/Leantime/leantime/releases) and download the latest file named `Leantime-vx.x.x.zip`.
+
+        Extract the archive on your local machine or directly on the server.
+      </Step>
+
+      <Step title="Create an empty database">
+        Log in to MySQL and create a dedicated database for Leantime.
+
+        ```sql
+        CREATE DATABASE leantime CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+        CREATE USER 'leantime_user'@'localhost' IDENTIFIED BY 'your_password';
+        GRANT ALL PRIVILEGES ON leantime.* TO 'leantime_user'@'localhost';
+        FLUSH PRIVILEGES;
+        ```
+      </Step>
+
+      <Step title="Upload files to your server">
+        Copy the extracted directory to your server. The directory structure should look like:
+
+        ```
+        /var/www/leantime/
+        ├── app/
+        ├── config/
+        ├── public/       ← point your web root here
+        ├── storage/
+        └── ...
+        ```
+
+        Point your domain's document root to the `public/` directory, not to the project root.
+      </Step>
+
+      <Step title="Create the configuration file">
+        Rename `config/sample.env` to `config/.env`.
+
+        ```bash
+        cp config/sample.env config/.env
+        ```
+
+        Open `config/.env` and fill in your database credentials at minimum:
+
+        ```bash
+        LEAN_DB_HOST=localhost
+        LEAN_DB_USER=leantime_user
+        LEAN_DB_PASSWORD=your_password
+        LEAN_DB_DATABASE=leantime
+        LEAN_EMAIL_RETURN=admin@yourdomain.com
+        ```
+      </Step>
+
+      <Step title="Run the web installer">
+        Navigate to `https://yourdomain.com/install` in your browser. The installer initialises the database schema and creates your first admin account.
+      </Step>
+    </Steps>
+
+    For Nginx/Apache virtual host examples and IIS-specific configuration (including enabling the PATCH method), see the [manual installation guide](/installation/manual).
+  </Tab>
+</Tabs>
+
+## After installation
+
+Once the installer completes, you land on the Leantime dashboard. Here's what to do next.
+
+<Steps>
+  <Step title="Log in with your admin account">
+    Use the credentials you set during installation. The admin account has access to all system settings, user management, and every project.
+  </Step>
+
+  <Step title="Create your first project">
+    Click **Projects** in the left sidebar, then **New project**. Give it a name and choose whether it should be visible to all users, restricted by client, or limited to invited members.
+  </Step>
+
+  <Step title="Invite your team">
+    Go to **Administration → Users** and click **Add user**. Assign each person a role — Reader, Commenter, Editor, Manager, or Admin — and optionally assign them directly to one or more projects.
+  </Step>
+</Steps>
+
+<CardGroup cols={2}>
+  <Card title="Docker installation" icon="docker" href="/installation/docker">
+    Production Docker Compose setup with volumes, networking, and mail
+  </Card>
+  <Card title="Manual installation" icon="server" href="/installation/manual">
+    Full walkthrough for Apache, Nginx, and IIS web servers
+  </Card>
+  <Card title="Configuration reference" icon="gear" href="/installation/configuration">
+    All environment variables available in config/.env
+  </Card>
+  <Card title="System requirements" icon="list-check" href="/getting-started/system-requirements">
+    PHP version, extensions, and database requirements
+  </Card>
+</CardGroup>

@@ -1,0 +1,101 @@
+---
+title: "Plan and track projects in Leantime"
+description: "Create and manage projects in Leantime: monitor progress on dashboards, post status updates, control team access, generate reports, and archive completed work."
+---
+
+Projects are the top-level container in Leantime. Everything — tasks, sprints, goals, timesheets, wikis, and files — belongs to a project. You can run as many projects at once as you need and switch between them from the global navigation.
+
+## Creating a project
+
+<Steps>
+  <Step title="Open the project picker">
+    Click the project name in the top navigation bar to open the project switcher, then select **New project**.
+  </Step>
+  <Step title="Name your project">
+    Enter a name and an optional description. The name appears in the sidebar and all navigation elements.
+  </Step>
+  <Step title="Set access">
+    Choose who can see the project (see [Project access](#project-access)).
+  </Step>
+  <Step title="Save">
+    Click **Create project**. Leantime drops you into the new project's dashboard.
+  </Step>
+</Steps>
+
+## Project dashboard
+
+The project dashboard is your at-a-glance overview of a project's health. It shows:
+
+- **Completion percentage** — how many tasks are in a "done" status vs the total
+- **Estimated completion date** — a projection based on current velocity
+- **Planned completion date** — the target date you set
+- **Recent tasks** — the latest to-dos added or updated
+- **Active sprint** — the current sprint name and its progress
+
+The dashboard updates in real time as team members log work.
+
+## Project access
+
+When you create or edit a project, you choose one of three access levels:
+
+<CardGroup cols={3}>
+  <Card title="Public to everyone" icon="globe">
+    All authenticated users in your Leantime instance can see and contribute to the project. Good for company-wide initiatives.
+  </Card>
+  <Card title="Client-restricted" icon="building">
+    Only users assigned to the same client as the project can access it. Useful when you manage multiple client accounts.
+  </Card>
+  <Card title="Directly assigned only" icon="lock">
+    Only users explicitly added to the project can see it. Best for sensitive or internal projects.
+  </Card>
+</CardGroup>
+
+<Note>
+  Admins and Owners can always access all projects regardless of the access level.
+</Note>
+
+## Project roles and permissions
+
+Within a project, user access is controlled by two things: their system-wide role and whether they have been directly assigned to the project.
+
+System roles determine what actions a user can take across Leantime. When users are added to a project, their system role continues to govern what they can edit, approve, or delete within that project.
+
+To add a team member to a project, go to **Project Settings > Team** and invite them by email or username.
+
+## Status updates and reports
+
+Leantime provides two ways to communicate project health:
+
+<Tabs>
+  <Tab title="Status updates">
+    Post a written status update from the project dashboard. Updates appear in a chronological feed and can be used to keep stakeholders informed without requiring a meeting. Include a RAG status (Red / Amber / Green) to signal overall health at a glance.
+  </Tab>
+  <Tab title="Reports">
+    The **Reports** section in the project sidebar shows task completion over time, burndown charts per sprint, and time logged by team member. Use the date range filter to narrow the view to a specific period. Reports can be printed directly from the browser.
+  </Tab>
+</Tabs>
+
+## Switching between projects
+
+Click the project name in the top navigation bar to open the project switcher. Your most recently visited projects appear at the top of the list. You can also search by project name.
+
+When you switch projects, the sidebar updates to show the new project's sections — tasks, sprints, wiki, timesheets, goals, and so on.
+
+## Archiving a project
+
+When a project is complete, you can archive it to remove it from the active project list without deleting any data.
+
+<Steps>
+  <Step title="Open project settings">
+    Click **Settings** in the project sidebar.
+  </Step>
+  <Step title="Archive the project">
+    Scroll to the bottom of the settings page and click **Archive project**.
+  </Step>
+</Steps>
+
+Archived projects are hidden from the project switcher by default. You can view archived projects by enabling the **Show archived** toggle in the project list. All tasks, timesheets, and other data remain intact and searchable.
+
+<Tip>
+  Archive rather than delete. Deleting a project removes all of its tasks, timesheets, and files permanently.
+</Tip>

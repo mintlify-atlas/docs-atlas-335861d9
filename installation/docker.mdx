@@ -1,0 +1,132 @@
+---
+title: 'Deploy Leantime with Docker'
+description: 'Run Leantime using the official Docker image or Docker Compose. Covers single-container setup, volumes, reverse proxy, and plugin persistence.'
+---
+
+Leantime provides an official image on Docker Hub that bundles PHP, Nginx, and all required extensions. You can start a single container in minutes or use Docker Compose to include a managed MySQL database alongside the application.
+
+## Prerequisites
+
+- Docker Engine installed on your host
+- A running MySQL 8.0+ or MariaDB 10.6+ instance, or plan to use Docker Compose to start one
+
+## Single-container quick start
+
+Create a Docker network first so the Leantime container can reach your database container by hostname:
+
+```bash
+docker network create leantime-net
+```
+
+Then run the Leantime container, replacing the placeholder values with your actual database credentials:
+
+```bash
+docker run -d --restart unless-stopped -p 8080:8080 --network leantime-net \
+  -e LEAN_DB_HOST=mysql_leantime \
+  -e LEAN_DB_USER=admin \
+  -e LEAN_DB_PASSWORD=321.qwerty \
+  -e LEAN_DB_DATABASE=leantime \
+  -e LEAN_EMAIL_RETURN=changeme@local.local \
+  --name leantime leantime/leantime:latest
+```
+
+Once the container is running, open `http://<your-host>:8080/install` in a browser and follow the installer to create the database schema and your first admin account.
+
+## Docker Compose setup
+
+For a complete stack that includes MySQL, use the official Docker Compose file. It defines named volumes for the database, user-uploaded files, plugins, and logs so that data persists across container restarts.
+
+The official compose file is maintained at [github.com/Leantime/docker-leantime](https://github.com/Leantime/docker-leantime/blob/master/docker-compose.yml). Download it and place it alongside an `.env` file that contains your configuration variables (see [Configuration](/installation/configuration) for the full variable reference).
+
+```bash
+docker compose up -d
+```
+
+The included `docker-compose.yml` in the source repository defines these volumes:
+
+```yaml
+volumes:
+  db_data:
+  userfiles:
+  public_userfiles:
+  plugins:
+  logs:
+```
+
+<Note>
+The MySQL container uses a healthcheck. The Leantime service waits for the database to be healthy before starting, so the first launch may take 30–60 seconds.
+</Note>
+
+## Plugin volume mount
+
+<Warning>
+If you plan to install plugins, you must mount the plugins directory as a named volume. Without this mount, any plugins you install will be removed when the container restarts.
+</Warning>
+
+Add the following volume entry to your `docker run` command:
+
+```bash
+-v plugins:/var/www/html/app/Plugins
+```
+
+Or include it in the `volumes` section of your Compose service, as shown in the official compose file:
+
+```yaml
+volumes:
+  - plugins:/var/www/html/app/Plugins
+```
+
+Make sure the `www-data` user inside the container has write access to this directory.
+
+## Reverse proxy setup
+
+When Leantime is behind a reverse proxy such as Nginx or Traefik, you must tell the application its public URL. Without this, redirect URLs and generated links will point to the internal container address instead of your domain.
+
+Set the `LEAN_APP_URL` environment variable to your public domain:
+
+```bash
+-e LEAN_APP_URL=https://yourdomain.com
+```
+
+In a Compose file:
+
+```yaml
+environment:
+  LEAN_APP_URL: https://yourdomain.com
+```
+
+## Updating
+
+<Steps>
+  <Step title="Back up your database">
+    Before pulling a new image, take a snapshot of your database. If you are using Docker Compose with a named volume for MySQL, the data persists independently of the container — but a backup is still recommended.
+
+    ```bash
+    docker exec mysql_leantime mysqldump -u admin -p leantime > leantime_backup.sql
+    ```
+  </Step>
+  <Step title="Stop the running container">
+    ```bash
+    docker compose down
+    ```
+    Or, for a standalone container:
+    ```bash
+    docker stop leantime && docker rm leantime
+    ```
+  </Step>
+  <Step title="Pull the latest image">
+    ```bash
+    docker pull leantime/leantime:latest
+    ```
+  </Step>
+  <Step title="Restart with the same configuration">
+    ```bash
+    docker compose up -d
+    ```
+    Or re-run the original `docker run` command. The named volumes for the database and user files are preserved automatically.
+  </Step>
+</Steps>
+
+<Tip>
+If the new version includes database migrations, Leantime applies them automatically on first boot. You do not need to navigate to `/update` manually when using Docker.
+</Tip>

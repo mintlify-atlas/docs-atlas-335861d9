@@ -1,0 +1,140 @@
+---
+title: 'Manual Leantime installation on a server'
+description: 'Install Leantime on Apache, Nginx, or IIS by uploading a release ZIP, configuring a MySQL database, and running the web installer.'
+---
+
+A manual installation gives you full control over your web server environment. You upload the pre-built release archive, point your web server at the `public/` directory, set your database credentials, and run the browser-based installer. No build tools or Composer are required.
+
+## System requirements
+
+Before you begin, confirm your server meets these requirements:
+
+- **PHP** 8.2 or higher
+- **Database** MySQL 8.0+, MariaDB 10.6+, or PostgreSQL
+- **Web server** Apache, Nginx, or IIS (IIS requires additional configuration — see below)
+- **PHP extensions**: BC Math, Ctype, cURL, DOM, Exif, Fileinfo, Filter, GD, Hash, LDAP, Multibyte String, MySQL, OPcache, OpenSSL, PCNTL, PCRE, PDO, Phar, Session, Tokenizer, Zip, SimpleXML
+
+## Installation steps
+
+<Steps>
+  <Step title="Download the release archive">
+    Go to the [Leantime releases page](https://github.com/Leantime/leantime/releases) and download the file named `Leantime-vX.X.X.zip` for the version you want to install. Do not clone the repository — the release ZIP is a pre-built package that does not require running Composer or Node.
+  </Step>
+  <Step title="Create an empty database">
+    Create a new MySQL (or PostgreSQL) database and a dedicated database user with full privileges on that database. Record the hostname, port, database name, username, and password — you will need them in a later step.
+
+    ```sql
+    CREATE DATABASE leantime CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+    CREATE USER 'leantime'@'localhost' IDENTIFIED BY 'your_password';
+    GRANT ALL PRIVILEGES ON leantime.* TO 'leantime'@'localhost';
+    FLUSH PRIVILEGES;
+    ```
+  </Step>
+  <Step title="Upload the application to your server">
+    Extract the ZIP archive and upload the entire directory to your server. The recommended location is outside your web root (for example, `/var/www/leantime`), with only the `public/` subdirectory exposed to web traffic.
+  </Step>
+  <Step title="Point your domain root to the public/ directory">
+    Configure your web server's document root or virtual host to point to the `public/` directory inside the Leantime folder.
+
+    <Tabs>
+      <Tab title="Nginx">
+        ```nginx
+        server {
+            listen 80;
+            server_name yourdomain.com;
+            root /var/www/leantime/public;
+            index index.php;
+
+            location / {
+                try_files $uri $uri/ /index.php?$query_string;
+            }
+
+            location ~ \.php$ {
+                fastcgi_pass unix:/run/php/php8.2-fpm.sock;
+                fastcgi_index index.php;
+                include fastcgi_params;
+                fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+            }
+        }
+        ```
+      </Tab>
+      <Tab title="Apache">
+        ```apache
+        <VirtualHost *:80>
+            ServerName yourdomain.com
+            DocumentRoot /var/www/leantime/public
+
+            <Directory /var/www/leantime/public>
+                AllowOverride All
+                Require all granted
+            </Directory>
+        </VirtualHost>
+        ```
+
+        Leantime includes an `.htaccess` file in `public/` that handles URL rewriting. Ensure `mod_rewrite` is enabled.
+      </Tab>
+    </Tabs>
+  </Step>
+  <Step title="Create the configuration file">
+    Inside the Leantime directory, rename `config/sample.env` to `config/.env`:
+
+    ```bash
+    cp config/sample.env config/.env
+    ```
+  </Step>
+  <Step title="Fill in your database credentials">
+    Open `config/.env` in a text editor and set the minimum required values:
+
+    ```ini
+    LEAN_DB_HOST = 'localhost'
+    LEAN_DB_USER = 'leantime'
+    LEAN_DB_PASSWORD = 'your_password'
+    LEAN_DB_DATABASE = 'leantime'
+    LEAN_DB_PORT = '3306'
+
+    LEAN_EMAIL_RETURN = 'admin@yourdomain.com'
+    ```
+
+    See [Configuration](/installation/configuration) for the full list of available environment variables.
+  </Step>
+  <Step title="Set directory permissions">
+    The web server process needs write access to the `userfiles/`, `public/userfiles/`, `storage/`, and `bootstrap/cache/` directories:
+
+    ```bash
+    chown -R www-data:www-data /var/www/leantime
+    chmod -R 775 /var/www/leantime/userfiles \
+                 /var/www/leantime/public/userfiles \
+                 /var/www/leantime/storage \
+                 /var/www/leantime/bootstrap/cache
+    ```
+  </Step>
+  <Step title="Run the web installer">
+    Open `https://yourdomain.com/install` in a browser. The installer will create all database tables and prompt you to create your first admin account. Once complete, you can log in and start using Leantime.
+  </Step>
+</Steps>
+
+## IIS-specific configuration
+
+Leantime works on Internet Information Services (IIS) but requires one additional change to allow the `PATCH` HTTP method, which is used by the application's API.
+
+<Steps>
+  <Step title="Open the Handler Mappings for your site">
+    Open IIS Manager, expand the server and sites tree on the left, and select the Leantime site. Double-click **Handler Mappings**.
+  </Step>
+  <Step title="Edit the PHP handler">
+    Double-click the PHP handler mapping used by the site (for example, the FastCGI handler for `.php` files).
+  </Step>
+  <Step title="Add the PATCH verb">
+    Click **Request Restrictions**, then click the **Verbs** tab. Select **One of the following verbs** and add `PATCH` to the list — for example: `GET,HEAD,POST,PATCH`. Click **OK**.
+  </Step>
+  <Step title="Fix the FastCGI executable path">
+    In the **Executable (optional)** field, wrap the path to `php-cgi.exe` in double quotes if it contains a space — for example, `"C:\Program Files\PHP\php-cgi.exe"`. Click **OK**.
+  </Step>
+  <Step title="Create the FastCGI application">
+    A popup will appear asking if you want to create a FastCGI application. Click **Yes**.
+  </Step>
+</Steps>
+
+<Note>
+You may need to repeat the IIS handler mapping step each time you upgrade PHP.
+</Note>
